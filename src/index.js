@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom';
 import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
-import * as firebase from 'firebase';
+import firebase from 'firebase/app';
+import "firebase/auth"
+import "firebase/analytics"
+import "firebase/firestore";
 
 
 const config = {
@@ -17,13 +20,37 @@ const config = {
   measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
 
-firebase.initializeApp(config);
+const app = firebase.initializeApp(config);
 firebase.analytics();
+export const db = firebase.firestore();
 export default firebase;
+
+
+//Give user permission to access the data
+firebase.auth().signInAnonymously().catch(function(error) {
+  // Handle Errors here.
+  var errorCode = error.code;
+  var errorMessage = error.message;
+  console.log("Error authenticating users for Firebase. Error returned: " + error.code + ": " + error.message);
+});
+
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    // User is signed in.
+    var isAnonymous = user.isAnonymous;
+    var uid = user.uid;
+    console.log("User signed in");
+  } else {
+    // User is signed out.
+
+  }
+
+});
 
 ReactDOM.render(
   <React.StrictMode>
     <App />
+
   </React.StrictMode>,
   document.getElementById('root')
 );
