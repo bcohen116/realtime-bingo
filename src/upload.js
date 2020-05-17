@@ -8,6 +8,8 @@ import firebase from './index'
 import CSVReader from 'react-csv-reader'
 import './upload.css'
 import { Link} from 'react-router-dom';
+import history from './history';
+import Bingo from './bingo'
 
 
 const papaparseOptions = {
@@ -22,13 +24,14 @@ const papaparseOptions = {
 
 class BoardEntry {
   //This class contains the metadata to receive/send the information about bingo squares to firebase
-  constructor (name, description, rarity){
+  constructor (name, description, rarity, id){
     this.name = name;
     this.description = description;
     this.rarity = rarity;
+    this.id = id;
   }
   toString(){
-    return this.name + ', ' + this.description + ', ' + this.rarity;
+    return this.name + ', ' + this.description + ', ' + this.rarity + ', ' + this.id;
   }
 
 }
@@ -38,12 +41,13 @@ var entryConverter = {
           return {
               name: entry.name,
               description: entry.description,
-              rarity: entry.rarity
+              rarity: entry.rarity,
+              id: entry.id
               }
       },
   fromFirestore: function(snapshot, options){
       const data = snapshot.data(options);
-      return new BoardEntry(data.name, data.description, data.rarity)
+      return new BoardEntry(data.name, data.description, data.rarity, data.id)
   }
 }
 
@@ -68,19 +72,24 @@ class Upload extends React.Component {
       //User put in the wrong kind of file
 
       //TODO display an error or alert or something
+      console.log("Incorect filetype");
     }
     else{
       //valid file type, now check the contents
+      var rarityValid = true;
       data.forEach(function(item, index){
         if (typeof item.rarity != 'number' ||
-          (typeof item.rarity == 'number' && (item.rarity < 0 || item.rarity > 5))){
+          (typeof item.rarity == 'number' && (item.rarity < 1 || item.rarity > 4))){
             //The rarity should be a number showing how rare it is.
             //Hitting here means there is at least one row in the csv that has a bad value for rarity
 
             //TODO add error or alert
+            console.log("Bad data in the rarity column");
+            rarityValid = false;
         }
 
       });
+      if (rarityValid){
         //data is valid, since all the other fields are stings and should be fine
         //Now save the data to firebase for use later
         const roomRef = db.collection('rooms');
@@ -91,7 +100,7 @@ class Upload extends React.Component {
             console.log("Doc ID query returned");
             querySnapshot.forEach(function(doc) {
               // doc.data() is never undefined for query doc snapshots
-              if (doc.id != '' && doc.id != null && this.state.roomId === ''){
+              if (doc.id !== '' && doc.id !== null && this.state.roomId === ''){
                 //Only take the first doc ID that has content since we blocked duplicates in App.js
                 this.state.roomId = doc.id;
               }
@@ -123,12 +132,14 @@ class Upload extends React.Component {
                         console.log(item);
                         roomRef.doc(this.state.roomId).collection("board_entries")
                           .withConverter(entryConverter)
-                          .add(new BoardEntry(item.name, item.description, item.rarity))
+                          .add(new BoardEntry(item.name, item.description, item.rarity, index))
                           .then(function(){
                             console.log("Entry written to firebase");
                           }.bind(this));
                       }.bind(this));
 
+                      var nextUrl = "/room/" + encodeURIComponent(this.state.room_name) + "/" + encodeURIComponent(this.state.roomId);
+                      history.push(nextUrl);
 
               }.bind(this));
             }
@@ -139,6 +150,8 @@ class Upload extends React.Component {
           .catch(function(error){
             console.log("Error getting documents: ", error);
           }.bind(this));
+      }
+
     }
   }
 
@@ -193,7 +206,7 @@ class Upload extends React.Component {
             <p>OPTIONAL: Describes what needs to happen to check this event off on a bingo board.</p>
             <hr />
             <Alert.Heading>Rarity</Alert.Heading>
-            <p>How often does this normally occur? 0 = very commonly, 5 = Extremely rare. Bingo boards are generated so that fewer rare events are displayed on each board.</p></Alert>
+            <p>How often does this normally occur? 1 = very commonly, 4 = Extremely rare. Bingo boards are generated so that fewer rare events are displayed on each board.</p></Alert>
           <Alert variant="warning"> You can download the template below for a quick start and it should open in most spreadsheet editors</Alert>
           <Link to="/Real-Time Bingo Data Template.csv" target="_blank" download>Download Template</Link>
         </div>

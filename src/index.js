@@ -58,7 +58,7 @@ ReactDOM.render(
     <Switch>
        <Route exact path="/" component={App} />
        <Route path="/upload/:room_name" component={Upload}/>
-       <Route path="/room/:room_name" component={Bingo}/>
+       <Route path="/room/:room_name/:room_id" component={Bingo}/>
        <Route component={Notfound} />
     </Switch>
 
