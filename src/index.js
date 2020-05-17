@@ -7,6 +7,9 @@ import firebase from 'firebase/app';
 import "firebase/auth"
 import "firebase/analytics"
 import "firebase/firestore";
+import {Route, Link, BrowserRouter as Router, Switch} from 'react-router-dom'
+import Upload from './upload'
+import Notfound from './notfound'
 
 
 const config = {
@@ -48,10 +51,16 @@ firebase.auth().onAuthStateChanged(function(user) {
 });
 
 ReactDOM.render(
+  <Router>
   <React.StrictMode>
-    <App />
+    <Switch>
+       <Route exact path="/" component={App} />
+       <Route path="/upload" component={Upload}/>
+       <Route component={Notfound} />
+    </Switch>
 
-  </React.StrictMode>,
+  </React.StrictMode>
+  </Router>,
   document.getElementById('root')
 );
 

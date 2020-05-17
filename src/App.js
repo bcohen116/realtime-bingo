@@ -1,21 +1,20 @@
 import React from 'react';
 import logo from './logo.svg';
 import './App.css';
-import Button from 'react-bootstrap/Button';
-import Alert from 'react-bootstrap/Alert';
+import {Button, Alert} from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {db} from './index';
+import firebase from './index'
 
-//Alert for bad text in the room name input
-
-
+//Takes info from the form and stores it in firebase accordingly
 class NameForm extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
       value: '',
       alertVisible: false,
-      alertText: "Placeholder Alert"
+      alertText: "Placeholder Alert",
+      docValid: true
     };
 
     this.handleChange = this.handleChange.bind(this);
@@ -23,24 +22,53 @@ class NameForm extends React.Component {
   }
 
   handleChange(event) {
+    //Every time a new character is typed the variable gets updated
     this.setState({value: event.target.value});
   }
 
   handleSubmit(event) {
-
-    if (this.state.value === '' || this.state.value === null){
-
+    //Enter was pressed or submit btn clicked. Decide what to do now
+    event.preventDefault();
+    console.log("form submitted...");
+    if (this.state.value.trim() === '' || this.state.value.trim() === null){
+      //The entered text was empty or only spaces
       this.setState({alertVisible: true});
       this.setState({alertText: "Field cannot be left blank."});
     }
-    else {
-      const roomRef = db.collection('rooms').add({
-        room_name: this.state.value,
-        user: "test",
-      });
-      console.log("Sent data to database for new room");
+    else if (this.state.value.trim().length > 30){
+      //Prevent people from abusing the database with extra long strings
+      this.setState({alertVisible: true});
+      this.setState({alertText: "Name is too long."});
     }
-    event.preventDefault();
+    else {
+      const roomRef = db.collection('rooms');
+      //Query the database for rooms that already exist with the inputted name
+      roomRef.where("room_name", "==", this.state.value.trim())
+        .get()
+        .then(function(querySnapshot){
+          //Response received from firebase
+          querySnapshot.forEach(function(doc){
+            //doc.data will never be null for queries
+            console.log("Found a match looking for room names in document ", doc.id, " ", doc.data());
+            this.setState({alertVisible: true});
+            this.setState({alertText: "This room already exists, make a more unique name"});
+            this.setState({docValid: false}); // Already have this name, block data from being sent to database
+          }.bind(this))
+
+          //Check if querySnapshot found any matches
+          if (this.state.docValid){
+            roomRef.add({
+              room_name: this.state.value.trim(),
+              timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            console.log("Sent data to database for new room");
+          }
+          this.setState({docValid: true}); //done with methods, allow data to be valid again
+        }.bind(this))
+        .catch(function(error){
+          console.log("Error getting documents: ", error);
+        });
+    }
   }
 
 
@@ -51,7 +79,7 @@ class NameForm extends React.Component {
       <div className="roomCreation">
         {this.state.alertVisible && (<Alert variant="danger">{this.state.alertText}</Alert>)}
         {!this.state.alertVisible && (<Alert variant="danger" style={{visibility:"hidden"}}>{this.state.alertText}</Alert>)}
-        <input className="createInput" type="text" value={this.state.value} onChange={this.handleChange} placeholder="Room Name" />
+        <input className="createInput" required type="text" value={this.state.value} onChange={this.handleChange} placeholder="Room Name" />
         <Button className="createBtn" variant="outline-success" type="submit" >Create Room</Button>{' '}
       </div>
       </form>
@@ -65,7 +93,6 @@ function App(){
     <div className="App">
       <header className="App-header">Real-Time Bingo Online</header>
       <NameForm/>
-
     </div>
   );
 
