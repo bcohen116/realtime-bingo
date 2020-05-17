@@ -7,9 +7,11 @@ import firebase from 'firebase/app';
 import "firebase/auth"
 import "firebase/analytics"
 import "firebase/firestore";
-import {Route, Link, BrowserRouter as Router, Switch} from 'react-router-dom'
+import {Route, Link, Router, Switch} from 'react-router-dom'
 import Upload from './upload'
 import Notfound from './notfound'
+import Bingo from './bingo'
+import history from './history';
 
 
 const config = {
@@ -51,11 +53,12 @@ firebase.auth().onAuthStateChanged(function(user) {
 });
 
 ReactDOM.render(
-  <Router>
+  <Router  history={history}>
   <React.StrictMode>
     <Switch>
        <Route exact path="/" component={App} />
-       <Route path="/upload" component={Upload}/>
+       <Route path="/upload/:room_name" component={Upload}/>
+       <Route path="/room/:room_name" component={Bingo}/>
        <Route component={Notfound} />
     </Switch>
 

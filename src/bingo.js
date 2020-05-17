@@ -6,8 +6,9 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import {db} from './index';
 import firebase from './index'
 
+//This file contains the actual bingo game code
 
-class Upload extends React.Component {
+class Bingo extends React.Component {
   //Props extracts info from the url
   constructor(props) {
     super(props);
@@ -29,4 +30,4 @@ class Upload extends React.Component {
 }
 
 
-export default Upload;
+export default Bingo;
