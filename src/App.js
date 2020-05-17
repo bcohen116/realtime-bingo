@@ -44,13 +44,20 @@ class NameForm extends React.Component {
       this.setState({alertText: "Name is too long."});
     }
     else {
+      //Error check the input for bad characters for a url
       try{
-        decodeURIComponent(this.state.value.trim());
+        var decoded = decodeURIComponent(this.state.value.trim());
+        if (decoded !== this.state.value.trim()){
+          console.log("User input a string that is invalid for a url, values got lost in decode.");
+          this.setState({alertVisible: true});
+          this.setState({alertText: "Use less special characters."});
+          this.setState({docValid: false}); // Bad string, lock data from being sent to database
+        }
       }
       catch{
         console.log("User input a string that is invalid for a url");
         this.setState({alertVisible: true});
-        this.setState({alertText: "Use less symbols."});
+        this.setState({alertText: "Use less special characters."});
         this.setState({docValid: false}); // Bad string, lock data from being sent to database
       }
 

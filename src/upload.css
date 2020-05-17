@@ -1,0 +1,17 @@
+.csv-reader-input label {
+  color: white;
+}
+
+.csv-reader-input {
+  margin-bottom: 5vh;
+}
+
+table.formatTable {
+  margin-top: 1vh;
+}
+
+.formatContainer {
+  margin: auto;
+  width: 90vw;
+
+}
