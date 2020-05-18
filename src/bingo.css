@@ -8,3 +8,23 @@
   column-gap: 10px;
   row-gap: 15px;
 }
+
+button.createBtn {
+  font-size: calc(22px + 2vmin);
+  height: 15vh;
+}
+input.createInput {
+  margin-bottom: 1vh;
+  position: relative;
+
+  /* font-size: calc(22px + 2vmin); */
+  /* height: 15vh; */
+}
+.nameCreation{
+  display: grid;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  -ms-transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%);
+}

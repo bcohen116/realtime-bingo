@@ -24,13 +24,27 @@ class BoardEntry {
 
 }
 
+// class UserInfo {
+//   //This class contains the metadata to receive/send the information about bingo squares to firebase
+//   constructor (name, current_board_state, player_board){
+//     this.name = name;
+//     this.current_board_state = current_board_state;
+//     this.user_board = player_board;
+//   }
+//   toString(){
+//     return this.name + ', ' + this.description + ', ' + this.rarity + ', ' + this.id;
+//   }
+//
+// }
+
 //Puts raw data or data from  firebase into useable formats
 var entryConverter = {
   toFirestore: function(entry) {
           return {
               name: entry.name,
               description: entry.description,
-              rarity: entry.rarity
+              rarity: entry.rarity,
+              id: entry.id
               }
       },
   fromFirestore: function(snapshot, options){
@@ -38,6 +52,22 @@ var entryConverter = {
       return new BoardEntry(data.name, data.description, data.rarity, data.id)
   }
 }
+// var userConverter = {
+//   toFirestore: function(entry) {
+//           return {
+//               name: entry.name,
+//               current_board_state: entry.current_board_state,
+//               player_board: entry.player_board: {entry.player_board.name,
+//                               entry.player_board.description,
+//                               entry.player_board.rarity,
+//                               entry.player_board.id}
+//               }
+//       },
+//   fromFirestore: function(snapshot, options){
+//       const data = snapshot.data(options);
+//       return new BoardEntry(data.name, data.description, data.rarity, data.id)
+//   }
+// }
 
 
 class Bingo extends React.Component {
@@ -46,6 +76,7 @@ class Bingo extends React.Component {
     super(props);
     this.state = {
       value: '',
+      sample: '',
       room_name: decodeURIComponent(props.match.params.room_name),
       room_id: decodeURIComponent(props.match.params.room_id),
       all_entries: [],
@@ -54,10 +85,23 @@ class Bingo extends React.Component {
       rare_entries: [],
       ultra_rare_entries: [],
       user_board_entries: [],
-      user_board: []
+      user_board: [],
+      board_ids: [],
+      boardVisible: false,
+      current_board_state: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      user_id: '',
+      active: [false,false,false,false,false,false,false,false,false,false,false,
+      false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+      bestOdds: 0,
+      mode: 'classic'
     };
     console.log("Room name received: " + this.state.room_name, ", ID received: " + this.state.room_id);
     this.generateBingoEntries = this.generateBingoEntries.bind(this);
+    this.handleChange = this.handleChange.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
+    this.addUser = this.addUser.bind(this);
+    this.handleClick = this.handleClick.bind(this);
+    this.checkBingo = this.checkBingo.bind(this);
   }
 
   generateBingoEntries(){
@@ -112,7 +156,6 @@ class Bingo extends React.Component {
 
         //Found all ultra rares, now find rares
         if (this.state.rare_entries.length > 0){
-          console.log("spot 1");
           var minRare = 0;
           var maxRare = this.state.rare_entries.length;
           var pickedRareNums = []; //Don't let the random pick the same element twice
@@ -120,9 +163,7 @@ class Bingo extends React.Component {
           //Pick 2 from this rarity
           for (var x = 0; x < (2 + extraPicks); x++){
             //Double check the extra picks aren't pushing this out of bounds
-            console.log("spot 2");
             if (this.state.rare_entries.length > x){
-              console.log("spot 3");
               var rand2 = Math.floor(minRare + Math.random() * (maxRare - minRare));
               while(pickedRareNums.includes(rand2)){
                 //Keep picking new randoms until we get a unique one
@@ -140,12 +181,10 @@ class Bingo extends React.Component {
             }
             else{
               //Not enough rare options in the database, tell the next category how many we didn't get to
-              console.log("spot 4");
               extraPicks += (2 + extraPicks) - x;
               break; //need this or it will infinite loop since we're changing the for condition variable
             }
           }
-          console.log("spot 5");
           extraPicks -= extraFulfilled; //take off the extras that we already did
         }
         else{
@@ -283,6 +322,7 @@ class Bingo extends React.Component {
             this.state.user_board.push(new BoardEntry("Free Space","This space is completely free!",1,this.state.all_entries.length));
             //ID guarenteed to be unique since it is created in upload.js as 0-(length-1) range of id's
             this.state.all_entries.push(this.state.user_board[this.state.user_board.length - 1]); //add it to the overall list for later
+            this.state.board_ids.push(this.state.user_board[this.state.user_board.length - 1].id);//store the id for use later in the user functions
           }
           else{
             var rand7 = Math.floor(minCom2 + Math.random() * (maxCom2 - minCom2));
@@ -292,9 +332,11 @@ class Bingo extends React.Component {
             }
             pickedComNums2.push(rand7); //Found a unique #, add it to list so we dont pick it again
             this.state.user_board.push(this.state.user_board_entries[rand7]);
+            this.state.board_ids.push(this.state.user_board[this.state.user_board.length - 1].id);//store the id for later in the user functions
           }
         }.bind(this));
         console.log("Created the board: " + this.state.user_board);
+        this.setState({sample: "something"}); //random value change to tell react to re-render the page with our new stuff
 
     }.bind(this));
   }
@@ -306,23 +348,185 @@ class Bingo extends React.Component {
     this.generateBingoEntries();
   }
 
+
+  addUser(){
+    //Once a name is typed in, make an entry in firebase for their information
+    console.log(this.state.value,this.state.current_board_state,this.state.user_board);
+    const userCollection = db.collection('rooms').doc(this.state.room_id).collection("users");
+    userCollection.add({
+        name: this.state.value.trim(),
+        current_board_state: this.state.current_board_state,
+        player_board: this.state.board_ids
+      })
+      .then(function(docRef){
+        console.log("User written to firebase");
+        this.setState({user_id: docRef.id});//store the document id locally so we can get back to this document later
+        console.log("Doc ID found: " + docRef.id);
+      }.bind(this));
+
+
+  }
+
+  handleChange(event) {
+    //Every time a new character is typed the variable gets updated
+    this.setState({value: event.target.value});
+  }
+
+  handleSubmit(event) {
+    //Enter was pressed or submit btn clicked. Decide what to do now
+    event.preventDefault();
+    console.log("form submitted...");
+    if (this.state.value.trim() === '' || this.state.value.trim() === null){
+      //The entered text was empty or only spaces
+      this.setState({alertVisible: true});
+      this.setState({alertText: "Field cannot be left blank."});
+    }
+    else if (this.state.value.trim().length > 30){
+      //Prevent people from abusing the database with extra long strings
+      this.setState({alertVisible: true});
+      this.setState({alertText: "Name is too long."});
+    }
+    else{
+      //Get all of the users in this room
+      const userRef = db.collection('rooms').doc(this.state.room_id).collection("users");
+      userRef.where("name","==",this.state.value.trim())
+        .get().then(function(querySnapshot) {
+        //Loop through each document in the database which each contains info for one square of a bingo board
+          querySnapshot.forEach(function(doc) {
+
+          }.bind(this));
+          if (querySnapshot.empty){
+            //Username is not taken, move forward
+            console.log("User allowed");
+            this.setState({boardVisible: true});
+            this.addUser();
+          }
+          else{
+            this.setState({alertVisible: true});
+            this.setState({alertText: "Name is already taken in this current room."});
+          }
+
+      }.bind(this));
+    }
+  }
+
+  checkBingo(){
+    var maxOdds = 0;
+    if (this.state.mode === 'classic'){
+      //default mode, 5 in a line to win
+
+      //check rows
+      for (let row = 0; row < 5; row++){
+        let odds = 0;
+        for (let item = 0; item < 5; item++){
+          if (this.state.current_board_state[(5*row)+item] === 1){
+            odds += 1;
+          }
+        }
+        maxOdds = Math.max(odds, maxOdds);
+      }
+      //Check columns
+      for (let column = 0; column < 5; column++){
+        let odds = 0;
+        for (let item = 0; item < 5; item++){
+          if (this.state.current_board_state[column+(item*5)] === 1){
+            odds += 1;
+          }
+        }
+        maxOdds = Math.max(odds, maxOdds);
+      }
+      //Check diagonals
+      let diagonal1Odds = 0;
+      for (let item = 0; item < 5; item++){
+        if (this.state.current_board_state[item*6] === 1){
+          diagonal1Odds += 1;
+        }
+      }
+      maxOdds = Math.max(diagonal1Odds, maxOdds);
+      let diagonal2Odds = 0;
+      for (let item = 0; item < 5; item++){
+        if (this.state.current_board_state[(item+1) * 4] === 1){
+          diagonal2Odds += 1;
+        }
+      }
+      maxOdds = Math.max(diagonal2Odds, maxOdds);
+
+      this.setState({bestOdds : maxOdds});
+      if (maxOdds >= 5){
+        //This board has Bingo!
+        console.log("Bingo!");
+      }
+    }
+  }
+
+  handleClick(event, buttonId){
+    //When one of the bingo squares is clicked, toggle the appearance to reflect you selected or deselected
+    event.preventDefault();
+    var tempState = this.state.active;
+    tempState[buttonId] = !tempState[buttonId];
+    this.setState({active : tempState});
+
+    //Update arrays with current player board selections
+    var tempBoard = this.state.current_board_state;
+    tempBoard[buttonId] = this.state.active[buttonId] ? 1 : 0;
+    this.setState({current_board_state: tempBoard});
+    // console.log("board state: " + this.state.current_board_state);
+
+    //Check if this is a winning move, or how close it is to winning
+    this.checkBingo();
+
+    //Also tell firebase that an option was selected
+    const userInfoRef = db.collection('rooms').doc(this.state.room_id).collection("users").doc(this.state.user_id);
+    userInfoRef.update({
+      current_board_state: this.state.current_board_state
+    }).then(function(){
+      console.log("Document successfully updated!");
+    }).catch(function(error){
+      // The document probably doesn't exist.
+      console.error("Error updating document: ", error);
+    });
+  }
+
   render() {
+    const boardItems = this.state.user_board.map((entry,id) => (
+      <Button key={id} className="bingoSquare" variant="outline-primary">
+      <p className="entryName">{entry.name}</p>
+      <p className="entryDescription">{entry.description}</p>
+      </Button>
+    ));
+    // console.log("rendered page");
     return(
       <div className="App">
         <header className="App-header">Real-Time Bingo Online</header>
-        <div className="bingoBoard">
-          {[new BoardEntry("thing name","the description",7,0)].map((entry,id) => (
-            <Button key={id} className="bingoSquare" variant="outline-primary">
+        {this.state.boardVisible && (<div className="bingoBoard">
+          {this.state.user_board.map((entry,id) =>
+            <Button key={id} className={"bingoSquare " + (this.state.active[id] ? "active" : "normal")} onClick={((e) => this.handleClick(e, id))} variant="outline-primary">
             <p className="entryName">{entry.name}</p>
             <p className="entryDescription">{entry.description}</p>
             </Button>
-          ))}
-        </div>
+          )}
+        </div>)}
+        {!this.state.boardVisible && (<form onSubmit={this.handleSubmit}>
+          <div className="nameCreation">
+            {this.state.alertVisible && (<Alert variant="danger">{this.state.alertText}</Alert>)}
+            {!this.state.alertVisible && (<Alert variant="danger" style={{visibility:"hidden"}}>{this.state.alertText}</Alert>)}
+            <input className="createInput" required type="text" value={this.state.value} onChange={this.handleChange} placeholder="Enter your Name" />
+            <Button className="createBtn" variant="outline-success" type="submit" >Enter Name</Button>{' '}
+          </div>
+        </form>)}
 
       </div>
     );
   }
 }
-
+//for reference
+// <ToggleButtonGroup type="checkbox" >
+// {this.state.user_board.map((entry,id) =>
+//   <ToggleButton key={id} value={id} className="bingoSquare" variant="outline-primary">
+//   <p className="entryName">{entry.name}</p>
+//   <p className="entryDescription">{entry.description}</p>
+//   </ToggleButton>
+// )}
+//  </ToggleButtonGroup>
 
 export default Bingo;
