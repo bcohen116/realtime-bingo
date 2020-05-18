@@ -672,7 +672,7 @@ class Bingo extends React.Component {
         <div className="mainPage">
           {this.state.boardVisible && (<div className="bingoBoard">
             {this.state.user_board.map((entry,id) =>
-              <Button key={id} className={"bingoSquare " + (this.state.active[id] ? "active" : "normal")} onClick={((e) => this.handleClick(e, id))} variant="outline-primary">
+              <Button key={id} className={"bingoSquare " + (this.state.active[id] ? "active" : "normal")} onClick={((e) => this.handleClick(e, id))} variant={(entry.rarity === 4) ? "outline-dark" : (entry.rarity === 3) ? "outline-warning" : (entry.rarity === 2) ? "outline-success" : "outline-primary"}>
               <p className="entryName">{entry.name}</p>
               <p className="entryDescription">{entry.description}</p>
               </Button>

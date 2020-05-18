@@ -186,7 +186,7 @@ class Upload extends React.Component {
               <tr>
                 <td>Grand Slam</td>
                 <td>A batter hits a homerun with the bases loaded.</td>
-                <td>5</td>
+                <td>4</td>
               </tr>
               <tr>
                 <td>Strikeout</td>
