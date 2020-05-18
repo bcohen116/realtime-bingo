@@ -2,7 +2,7 @@ import React from 'react';
 import logo from './logo.svg';
 import './App.css';
 import './bingo.css';
-import {Button, Alert} from 'react-bootstrap';
+import {Button, Alert, Table} from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {db} from './index';
 import firebase from './index'
@@ -93,7 +93,9 @@ class Bingo extends React.Component {
       active: [false,false,false,false,false,false,false,false,false,false,false,
       false,false,false,false,false,false,false,false,false,false,false,false,false,false],
       bestOdds: 0,
-      mode: 'classic'
+      mode: 'classic',
+      userListener: null,
+      users: []
     };
     console.log("Room name received: " + this.state.room_name, ", ID received: " + this.state.room_id);
     this.generateBingoEntries = this.generateBingoEntries.bind(this);
@@ -347,7 +349,10 @@ class Bingo extends React.Component {
     console.log("Page mounted...");
     this.generateBingoEntries();
   }
-
+  componentWillUnmount(){
+    console.log("Page unmounting...");
+    this.state.userListener();//unsubscribe from the firestore listener to avoid calling data after the page is destroyed
+  }
 
   addUser(){
     //Once a name is typed in, make an entry in firebase for their information
@@ -356,12 +361,26 @@ class Bingo extends React.Component {
     userCollection.add({
         name: this.state.value.trim(),
         current_board_state: this.state.current_board_state,
-        player_board: this.state.board_ids
+        player_board: this.state.board_ids,
+        best_odds: this.state.bestOdds
       })
       .then(function(docRef){
         console.log("User written to firebase");
         this.setState({user_id: docRef.id});//store the document id locally so we can get back to this document later
         console.log("Doc ID found: " + docRef.id);
+
+        //This does 8 reads for 6 users
+        let listener = userCollection.onSnapshot(function(querySnapshot) {
+            var users = [];
+            querySnapshot.forEach(function(doc) {
+                users.push({name: doc.data().name,
+                            best_odds: doc.data().best_odds});
+            }.bind(this));
+            users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+            this.setState({users : users});
+            console.log("Update received from users");
+        }.bind(this));
+        this.setState({userListener: listener});
       }.bind(this));
 
 
@@ -451,10 +470,50 @@ class Bingo extends React.Component {
       }
       maxOdds = Math.max(diagonal2Odds, maxOdds);
 
-      this.setState({bestOdds : maxOdds});
+      this.setState({bestOdds : maxOdds},
+        function(){
+          //SetState completed
+
+          //Also tell firebase that an option was selected
+          const userInfoRef = db.collection('rooms').doc(this.state.room_id).collection("users").doc(this.state.user_id);
+          userInfoRef.update({
+            current_board_state: this.state.current_board_state,
+            best_odds: this.state.bestOdds
+          }).then(function(){
+            console.log("Document successfully updated!");
+          }).catch(function(error){
+            // The document probably doesn't exist.
+            console.error("Error updating document: ", error);
+          });
+
+        }
+      );//5 in a line = win, this number is how many currently in line that is closest to winning on this board
+
+
       if (maxOdds >= 5){
         //This board has Bingo!
         console.log("Bingo!");
+
+        //TODO move this into a better place
+        //Remove all the users from firebase so we can start a new game
+        // var documentList = [];
+        // db.collection('rooms').doc(this.state.room_id).collection("users").get()
+        // .then(function(querySnapshot) {
+        //     querySnapshot.forEach(function(doc) {
+        //         // doc.data() is never undefined for query doc snapshots
+        //         documentList.push(doc.id); //Store all the documents that are old
+        //       }.bind(this));
+        //
+        //         //Remove old info from the database
+        //         documentList.forEach(function(docID){
+        //             db.collection('rooms').doc(this.state.room_id).collection("users").doc(docID)
+        //               .delete().then(function() {
+        //                 console.log("Document successfully deleted!");
+        //             }).catch(function(error) {
+        //                 console.error("Error removing document: ", error);
+        //             });
+        //         }.bind(this));
+        // }.bind(this));
       }
     }
   }
@@ -474,17 +533,6 @@ class Bingo extends React.Component {
 
     //Check if this is a winning move, or how close it is to winning
     this.checkBingo();
-
-    //Also tell firebase that an option was selected
-    const userInfoRef = db.collection('rooms').doc(this.state.room_id).collection("users").doc(this.state.user_id);
-    userInfoRef.update({
-      current_board_state: this.state.current_board_state
-    }).then(function(){
-      console.log("Document successfully updated!");
-    }).catch(function(error){
-      // The document probably doesn't exist.
-      console.error("Error updating document: ", error);
-    });
   }
 
   render() {
@@ -498,23 +546,42 @@ class Bingo extends React.Component {
     return(
       <div className="App">
         <header className="App-header">Real-Time Bingo Online</header>
-        {this.state.boardVisible && (<div className="bingoBoard">
-          {this.state.user_board.map((entry,id) =>
-            <Button key={id} className={"bingoSquare " + (this.state.active[id] ? "active" : "normal")} onClick={((e) => this.handleClick(e, id))} variant="outline-primary">
-            <p className="entryName">{entry.name}</p>
-            <p className="entryDescription">{entry.description}</p>
-            </Button>
-          )}
-        </div>)}
-        {!this.state.boardVisible && (<form onSubmit={this.handleSubmit}>
-          <div className="nameCreation">
-            {this.state.alertVisible && (<Alert variant="danger">{this.state.alertText}</Alert>)}
-            {!this.state.alertVisible && (<Alert variant="danger" style={{visibility:"hidden"}}>{this.state.alertText}</Alert>)}
-            <input className="createInput" required type="text" value={this.state.value} onChange={this.handleChange} placeholder="Enter your Name" />
-            <Button className="createBtn" variant="outline-success" type="submit" >Enter Name</Button>{' '}
+        <div className="mainPage">
+          {this.state.boardVisible && (<div className="bingoBoard">
+            {this.state.user_board.map((entry,id) =>
+              <Button key={id} className={"bingoSquare " + (this.state.active[id] ? "active" : "normal")} onClick={((e) => this.handleClick(e, id))} variant="outline-primary">
+              <p className="entryName">{entry.name}</p>
+              <p className="entryDescription">{entry.description}</p>
+              </Button>
+            )}
+          </div>)}
+          {!this.state.boardVisible && (<form onSubmit={this.handleSubmit}>
+            <div className="nameCreation">
+              {this.state.alertVisible && (<Alert variant="danger">{this.state.alertText}</Alert>)}
+              {!this.state.alertVisible && (<Alert variant="danger" style={{visibility:"hidden"}}>{this.state.alertText}</Alert>)}
+              <input className="createInput" required type="text" value={this.state.value} onChange={this.handleChange} placeholder="Enter your Name" />
+              <Button className="createBtn" variant="outline-success" type="submit" >Enter Name</Button>{' '}
+            </div>
+          </form>)}
+          <div className="playerList">
+            <Table striped bordered hover variant="dark">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                {this.state.users.map((user,id) =>
+                  <tr key={id}>
+                    <td>{user.best_odds}</td>
+                    <td>{user.name}</td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
           </div>
-        </form>)}
-
+        </div>
       </div>
     );
   }
