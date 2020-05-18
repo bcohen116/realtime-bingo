@@ -42,6 +42,7 @@ input.createInput {
 .mainPage {
   display: table;
   width:98vw;
+  margin-top: 1vh;
 }
 
 .playerList {
