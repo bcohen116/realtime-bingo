@@ -80,7 +80,10 @@ class NameForm extends React.Component {
             //No duplicates found, we are good to add to the db
             roomRef.add({
               room_name: this.state.value.trim(),
-              timestamp: firebase.firestore.FieldValue.serverTimestamp()
+              timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+              player_names: [],
+              player_scores: [],
+              winner: false
             });
             console.log("Sent data to database for new room");
 

@@ -40,6 +40,12 @@ input.createInput {
   display: table-cell;
   width:25%;
 }
+
+.bingoWinBtn{
+  grid-column-start: 3;
+  height: 7vh;
+
+}
 @media screen and (max-width: 750px) {
   .bingoBoard {
     display: grid;

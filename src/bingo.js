@@ -95,7 +95,8 @@ class Bingo extends React.Component {
       bestOdds: 0,
       mode: 'classic',
       userListener: null,
-      users: []
+      users: [],
+      users_unsorted: []
     };
     console.log("Room name received: " + this.state.room_name, ", ID received: " + this.state.room_id);
     this.generateBingoEntries = this.generateBingoEntries.bind(this);
@@ -104,6 +105,7 @@ class Bingo extends React.Component {
     this.addUser = this.addUser.bind(this);
     this.handleClick = this.handleClick.bind(this);
     this.checkBingo = this.checkBingo.bind(this);
+    this.handleBingoWin = this.handleBingoWin.bind(this);
   }
 
   generateBingoEntries(){
@@ -369,18 +371,71 @@ class Bingo extends React.Component {
         this.setState({user_id: docRef.id});//store the document id locally so we can get back to this document later
         console.log("Doc ID found: " + docRef.id);
 
-        //This does 8 reads for 6 users
-        let listener = userCollection.onSnapshot(function(querySnapshot) {
-            var users = [];
-            querySnapshot.forEach(function(doc) {
-                users.push({name: doc.data().name,
-                            best_odds: doc.data().best_odds});
+        //Get the current player list so we don't overwrite it
+        var currentNames = [];
+        var currentScores = [];
+        db.collection('rooms').doc(this.state.room_id).get()
+          .then(function(doc){
+            currentNames = doc.data().player_names;
+            currentScores = doc.data().player_scores;
+
+            //Add the new user we just made to a temporary array
+            currentNames.push(this.state.value.trim());
+            currentScores.push(0);
+
+            //Send the temporary array to the database so everything is now up to date
+            //Also reset winner so that if someone previously won, a new game will start
+            db.collection('rooms').doc(this.state.room_id).update({
+              winner: false,
+              player_names: currentNames,
+              player_scores: currentScores
+            }).then(function(){
+              // console.log("Winner successfully updated!");
+            }).catch(function(error){
+              // The document probably doesn't exist.
+              console.error("Error updating document: ", error);
+            });
+
+            //Get realtime updates any time a player is added, or a score is updated
+            let listener = db.collection('rooms').doc(this.state.room_id)
+              .onSnapshot(function(doc) {
+                var users = [];
+                    //Extract the data from firebase into one array
+                    doc.data().player_names.forEach(function(name, index){
+                      users.push({name: doc.data().player_names[index],
+                                  best_odds: doc.data().player_scores[index]});
+                    }.bind(this));
+
+                //save the data in local variables for use later
+                this.setState({users_unsorted: users},
+                function(){
+                  //Sort the list by the player score for display on the "leaderboard" table
+                  users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+                  this.setState({users : users});
+                }.bind(this));
+
+                console.log("Update received from users");
             }.bind(this));
-            users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
-            this.setState({users : users});
-            console.log("Update received from users");
-        }.bind(this));
-        this.setState({userListener: listener});
+            this.setState({userListener: listener});
+          }.bind(this))
+          .catch(function(error) {
+              console.log("Error getting document:", error);
+          });
+
+      
+
+        //This does at least 8 reads each button click for 6 users
+        // let listener = userCollection.onSnapshot(function(querySnapshot) {
+        //     var users = [];
+        //     querySnapshot.forEach(function(doc) {
+        //         users.push({name: doc.data().name,
+        //                     best_odds: doc.data().best_odds});
+        //     }.bind(this));
+        //     users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+        //     this.setState({users : users});
+        //     console.log("Update received from users");
+        // }.bind(this));
+        // this.setState({userListener: listener});
       }.bind(this));
 
 
@@ -486,6 +541,39 @@ class Bingo extends React.Component {
             console.error("Error updating document: ", error);
           });
 
+          //Get the current scores of all players so we don't ruin any data by updating
+          var currentNames = [];
+          var currentScores = [];
+          db.collection('rooms').doc(this.state.room_id).get()
+            .then(function(doc){
+              currentNames = doc.data().player_names;
+              currentScores = doc.data().player_scores;
+
+              currentNames.forEach(function(name, index){
+                if (name === this.state.value.trim()){
+                  //Update the player scores with the new value
+                  currentScores[index] = this.state.bestOdds;
+                }
+              }.bind(this));
+
+              //Update the room document which is being listened to by the realtime listener
+              //By updating this, the realtime listener only needs to read one document, instead of (# of users) * document
+              db.collection('rooms').doc(this.state.room_id).update({
+                player_scores: currentScores
+              }).then(function(){
+                // console.log("Winner successfully updated!");
+              }).catch(function(error){
+                // The document probably doesn't exist.
+                console.error("Error updating document: ", error);
+              });
+
+            }.bind(this))
+            .catch(function(error) {
+                console.log("Error getting document:", error);
+            });
+
+
+
         }
       );//5 in a line = win, this number is how many currently in line that is closest to winning on this board
 
@@ -494,26 +582,6 @@ class Bingo extends React.Component {
         //This board has Bingo!
         console.log("Bingo!");
 
-        //TODO move this into a better place
-        //Remove all the users from firebase so we can start a new game
-        // var documentList = [];
-        // db.collection('rooms').doc(this.state.room_id).collection("users").get()
-        // .then(function(querySnapshot) {
-        //     querySnapshot.forEach(function(doc) {
-        //         // doc.data() is never undefined for query doc snapshots
-        //         documentList.push(doc.id); //Store all the documents that are old
-        //       }.bind(this));
-        //
-        //         //Remove old info from the database
-        //         documentList.forEach(function(docID){
-        //             db.collection('rooms').doc(this.state.room_id).collection("users").doc(docID)
-        //               .delete().then(function() {
-        //                 console.log("Document successfully deleted!");
-        //             }).catch(function(error) {
-        //                 console.error("Error removing document: ", error);
-        //             });
-        //         }.bind(this));
-        // }.bind(this));
       }
     }
   }
@@ -535,6 +603,45 @@ class Bingo extends React.Component {
     this.checkBingo();
   }
 
+  handleBingoWin(event){
+    //Bingo btn was pressed, you win!
+    console.log("You got Bingo!");
+    this.state.userListener(); //stop listening to users table to save data usage
+
+
+    db.collection('rooms').doc(this.state.room_id).update({
+      winner: true,
+      player_names: [],
+      player_scores: []
+    }).then(function(){
+      console.log("Winner successfully updated!");
+    }).catch(function(error){
+      // The document probably doesn't exist.
+      console.error("Error updating document: ", error);
+    });
+
+
+    //Remove all the users from firebase so we can start a new game
+    var documentList = [];
+    db.collection('rooms').doc(this.state.room_id).collection("users").get()
+    .then(function(querySnapshot) {
+        querySnapshot.forEach(function(doc) {
+            // doc.data() is never undefined for query doc snapshots
+            documentList.push(doc.id); //Store all the documents that are old
+          }.bind(this));
+
+            //Remove old info from the database
+            documentList.forEach(function(docID){
+                db.collection('rooms').doc(this.state.room_id).collection("users").doc(docID)
+                  .delete().then(function() {
+                    console.log("Document successfully deleted!");
+                }).catch(function(error) {
+                    console.error("Error removing document: ", error);
+                });
+            }.bind(this));
+    }.bind(this));
+  }
+
   render() {
     const boardItems = this.state.user_board.map((entry,id) => (
       <Button key={id} className="bingoSquare" variant="outline-primary">
@@ -554,6 +661,7 @@ class Bingo extends React.Component {
               <p className="entryDescription">{entry.description}</p>
               </Button>
             )}
+            {this.state.bestOdds >= 5 && (<Button className="bingoWinBtn" variant="outline-danger" onClick={this.handleBingoWin}>Bingo!</Button>)}
           </div>)}
           {!this.state.boardVisible && (<form onSubmit={this.handleSubmit}>
             <div className="nameCreation">
@@ -563,7 +671,7 @@ class Bingo extends React.Component {
               <Button className="createBtn" variant="outline-success" type="submit" >Enter Name</Button>{' '}
             </div>
           </form>)}
-          <div className="playerList">
+          {this.state.boardVisible && (<div className="playerList">
             <Table striped bordered hover variant="dark">
               <thead>
                 <tr>
@@ -580,7 +688,7 @@ class Bingo extends React.Component {
                 )}
               </tbody>
             </Table>
-          </div>
+          </div>)}
         </div>
       </div>
     );
