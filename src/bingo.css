@@ -11,6 +11,14 @@
   /* width: 75%; */
 }
 
+.entryDescription {
+  font-size: x-small;
+}
+
+.uploadBtn{
+  margin-top: 10vh;
+}
+
 button.createBtn {
   font-size: calc(22px + 2vmin);
   height: 15vh;

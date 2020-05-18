@@ -26,6 +26,10 @@
   color: white;
 }
 
+.App-header > p.subtitle {
+  font-size: calc(8px + 1vmin);
+}
+
 button.createBtn {
   font-size: calc(22px + 2vmin);
   height: 15vh;

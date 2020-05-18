@@ -2,7 +2,7 @@ import React from 'react';
 import logo from './logo.svg';
 import './App.css';
 import './bingo.css';
-import {Button, Alert, Table} from 'react-bootstrap';
+import {Button, Alert, Table, Modal} from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {db} from './index';
 import firebase from './index'
@@ -69,7 +69,6 @@ var entryConverter = {
 //   }
 // }
 
-
 class Bingo extends React.Component {
   //Props extracts info from the url
   constructor(props) {
@@ -96,7 +95,9 @@ class Bingo extends React.Component {
       mode: 'classic',
       userListener: null,
       users: [],
-      users_unsorted: []
+      users_unsorted: [],
+      game_over: false,
+      winner_name: ''
     };
     console.log("Room name received: " + this.state.room_name, ", ID received: " + this.state.room_id);
     this.generateBingoEntries = this.generateBingoEntries.bind(this);
@@ -106,6 +107,8 @@ class Bingo extends React.Component {
     this.handleClick = this.handleClick.bind(this);
     this.checkBingo = this.checkBingo.bind(this);
     this.handleBingoWin = this.handleBingoWin.bind(this);
+    this.handleClose = this.handleClose.bind(this);
+    this.moveToUpload = this.moveToUpload.bind(this);
   }
 
   generateBingoEntries(){
@@ -185,7 +188,7 @@ class Bingo extends React.Component {
             }
             else{
               //Not enough rare options in the database, tell the next category how many we didn't get to
-              extraPicks += (2 + extraPicks) - x;
+              extraPicks += (2 + extraPicks) - (x + 1);
               break; //need this or it will infinite loop since we're changing the for condition variable
             }
           }
@@ -222,7 +225,7 @@ class Bingo extends React.Component {
             }
             else{
               //Not enough rare options in the database, tell the next category to use 1 extra
-              extraPicks += (10 + extraPicks) - x2;
+              extraPicks += (10 + extraPicks) - (x2 + 1);
               break; //need this or it will infinite loop since we're changing the for condition variable
             }
           }
@@ -387,6 +390,7 @@ class Bingo extends React.Component {
             //Also reset winner so that if someone previously won, a new game will start
             db.collection('rooms').doc(this.state.room_id).update({
               winner: false,
+              winner_name: '',
               player_names: currentNames,
               player_scores: currentScores
             }).then(function(){
@@ -411,7 +415,19 @@ class Bingo extends React.Component {
                 function(){
                   //Sort the list by the player score for display on the "leaderboard" table
                   users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
-                  this.setState({users : users});
+                  this.setState({winner_name: doc.data().winner_name})
+                  this.setState({game_over: doc.data().winner},
+                    function(){
+                      if (doc.data().winner === true){
+                        this.state.userListener(); //stop listening to users table to save data usage
+
+                        //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
+                      }
+                      else{
+                        this.setState({users : users});
+                      }
+                    }.bind(this))
+                  
                 }.bind(this));
 
                 console.log("Update received from users");
@@ -422,7 +438,7 @@ class Bingo extends React.Component {
               console.log("Error getting document:", error);
           });
 
-      
+
 
         //This does at least 8 reads each button click for 6 users
         // let listener = userCollection.onSnapshot(function(querySnapshot) {
@@ -586,6 +602,12 @@ class Bingo extends React.Component {
     }
   }
 
+  handleClose(){
+    //Generate new board and take player to name screen
+    window.location.reload(false);
+  }
+
+
   handleClick(event, buttonId){
     //When one of the bingo squares is clicked, toggle the appearance to reflect you selected or deselected
     event.preventDefault();
@@ -611,11 +633,13 @@ class Bingo extends React.Component {
 
     db.collection('rooms').doc(this.state.room_id).update({
       winner: true,
+      winner_name: this.state.value.trim(),
       player_names: [],
       player_scores: []
     }).then(function(){
-      console.log("Winner successfully updated!");
-    }).catch(function(error){
+      this.setState({game_over: true})
+      this.setState({winner_name: this.state.value.trim()})
+    }.bind(this)).catch(function(error){
       // The document probably doesn't exist.
       console.error("Error updating document: ", error);
     });
@@ -642,6 +666,10 @@ class Bingo extends React.Component {
     }.bind(this));
   }
 
+  moveToUpload(){
+    let url = window.location.origin + "/upload/" + encodeURIComponent(this.state.room_name);
+    window.open(url, '_blank');
+  }
   render() {
     const boardItems = this.state.user_board.map((entry,id) => (
       <Button key={id} className="bingoSquare" variant="outline-primary">
@@ -652,7 +680,7 @@ class Bingo extends React.Component {
     // console.log("rendered page");
     return(
       <div className="App">
-        <header className="App-header">Real-Time Bingo Online</header>
+        <header className="App-header">Real-Time Bingo Online <p className="subtitle">Welcome to: {this.state.room_name}</p></header>
         <div className="mainPage">
           {this.state.boardVisible && (<div className="bingoBoard">
             {this.state.user_board.map((entry,id) =>
@@ -690,6 +718,20 @@ class Bingo extends React.Component {
             </Table>
           </div>)}
         </div>
+        <Button className="uploadBtn" variant="secondary" onClick={this.moveToUpload}>
+          Upload Bingo Data
+        </Button>
+        <Modal show={this.state.game_over} onHide={this.handleClose} animation={false} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{this.state.winner_name} Wins!</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>Thanks for playing! A new game will start when someone enters a new user name.</Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={this.handleClose}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
       </div>
     );
   }
