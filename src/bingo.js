@@ -427,7 +427,7 @@ class Bingo extends React.Component {
                         this.setState({users : users});
                       }
                     }.bind(this))
-                  
+
                 }.bind(this));
 
                 console.log("Update received from users");
@@ -438,20 +438,6 @@ class Bingo extends React.Component {
               console.log("Error getting document:", error);
           });
 
-
-
-        //This does at least 8 reads each button click for 6 users
-        // let listener = userCollection.onSnapshot(function(querySnapshot) {
-        //     var users = [];
-        //     querySnapshot.forEach(function(doc) {
-        //         users.push({name: doc.data().name,
-        //                     best_odds: doc.data().best_odds});
-        //     }.bind(this));
-        //     users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
-        //     this.setState({users : users});
-        //     console.log("Update received from users");
-        // }.bind(this));
-        // this.setState({userListener: listener});
       }.bind(this));
 
 
@@ -680,7 +666,9 @@ class Bingo extends React.Component {
     // console.log("rendered page");
     return(
       <div className="App">
-        <header className="App-header">Real-Time Bingo Online <p className="subtitle">Welcome to: {this.state.room_name}</p></header>
+        <header className="App-header">Real-Time Bingo Online <p className="subtitle">Welcome to: {this.state.room_name}</p>
+          <p className="subtitle">To let others join, simply provide this link: {window.location.href}</p>
+        </header>
         <div className="mainPage">
           {this.state.boardVisible && (<div className="bingoBoard">
             {this.state.user_board.map((entry,id) =>
@@ -700,6 +688,7 @@ class Bingo extends React.Component {
             </div>
           </form>)}
           {this.state.boardVisible && (<div className="playerList">
+            <p style={{color: "white"}}>Bingo Betting and mode voting coming soon&trade;</p>
             <Table striped bordered hover variant="dark">
               <thead>
                 <tr>
@@ -736,14 +725,5 @@ class Bingo extends React.Component {
     );
   }
 }
-//for reference
-// <ToggleButtonGroup type="checkbox" >
-// {this.state.user_board.map((entry,id) =>
-//   <ToggleButton key={id} value={id} className="bingoSquare" variant="outline-primary">
-//   <p className="entryName">{entry.name}</p>
-//   <p className="entryDescription">{entry.description}</p>
-//   </ToggleButton>
-// )}
-//  </ToggleButtonGroup>
 
 export default Bingo;

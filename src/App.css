@@ -28,6 +28,7 @@
 
 .App-header > p.subtitle {
   font-size: calc(8px + 1vmin);
+  margin: 0;
 }
 
 button.createBtn {
