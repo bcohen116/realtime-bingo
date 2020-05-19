@@ -55,6 +55,14 @@ input.createInput {
   height: 7vh;
 
 }
+
+.cover-container{
+  z-index: 2;
+  height: 100%;
+  width:100%;
+  position: absolute;
+}
+
 @media screen and (max-width: 750px) {
   .bingoBoard {
     display: grid;

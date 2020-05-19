@@ -97,7 +97,8 @@ class Bingo extends React.Component {
       users: [],
       users_unsorted: [],
       game_over: false,
-      winner_name: ''
+      winner_name: '',
+      loading: false
     };
     console.log("Room name received: " + this.state.room_name, ", ID received: " + this.state.room_id);
     this.generateBingoEntries = this.generateBingoEntries.bind(this);
@@ -188,7 +189,7 @@ class Bingo extends React.Component {
             }
             else{
               //Not enough rare options in the database, tell the next category how many we didn't get to
-              extraPicks += (2 + extraPicks) - (x + 1);
+              extraPicks += (2 + extraPicks) - (x);
               break; //need this or it will infinite loop since we're changing the for condition variable
             }
           }
@@ -200,6 +201,7 @@ class Bingo extends React.Component {
           extraPicks += 2;
         }
 
+        console.log("extras: " + extraPicks, " total length: " + this.state.user_board_entries.length);
         //Now find uncommons
         if (this.state.uncommon_entries.length > 0){
           var minUnc = 0;
@@ -225,7 +227,7 @@ class Bingo extends React.Component {
             }
             else{
               //Not enough rare options in the database, tell the next category to use 1 extra
-              extraPicks += (10 + extraPicks) - (x2 + 1);
+              extraPicks += (10 + extraPicks) - (x2 );
               break; //need this or it will infinite loop since we're changing the for condition variable
             }
           }
@@ -243,7 +245,9 @@ class Bingo extends React.Component {
           var pickedComNums = [];
           extraFulfilled = 0;
           //Pick 2 from this rarity
+          console.log("extras: " + extraPicks, " total length: " + this.state.user_board_entries.length);
           for (var x3 = 0; x3 < (11 + extraPicks); x3++){
+            console.log("for loop: " + extraPicks);
             //Double check the extra picks aren't pushing this out of bounds
             if (this.state.common_entries.length > x3){
               var rand4 = Math.floor(minCom + Math.random() * (maxCom - minCom));
@@ -274,6 +278,12 @@ class Bingo extends React.Component {
                   }
                   if (!isItUsed1){
                     this.state.user_board_entries.push(this.state.all_entries[y]);
+                    // extraPicks += (11 + extraPicks) - (x3 + 1);
+                    if (x3 > 10){
+                      //since the original takes 11 entries, anything over 11 entries is extras
+                      //Mark here how many we completed so we don't double the extras
+                      extraFulfilled += 1;
+                    }
                   }
                 }
               }
@@ -281,14 +291,21 @@ class Bingo extends React.Component {
                 //Not enough entries, duplicate some
                 var rand5 = Math.floor(minCom + Math.random() * (maxCom - minCom));
                 this.state.user_board_entries.push(this.state.common_entries[rand5]);
+                if (x3 > 10){
+                  //since the original takes 11 entries, anything over 11 entries is extras
+                  //Mark here how many we completed so we don't double the extras
+                  extraFulfilled += 1;
+                }
               }
             }
           }
           extraPicks -= extraFulfilled; //take off the extras that we already did
+          console.log("extras finished?: " + extraPicks, " total length: " + this.state.user_board_entries.length);
         }
         else{
-          //Not enough rare options in the database, tell the next category to use 11 extra
+          //Not enough common options in the database, tell the next category to use 12 extra
           extraPicks += 11;
+          console.log("not enough common: " + extraPicks);
           //Check how to fill the remaining slots
           for (var x4 = 0; x4 < (11 + extraPicks); x4++){
             //There are at least 11 empty bingo squares to fill, start looking for unused ones
@@ -323,7 +340,7 @@ class Bingo extends React.Component {
         var minCom2 = 0;
         var maxCom2 = this.state.user_board_entries.length;
         var pickedComNums2 = [];
-        this.state.user_board_entries.forEach(function(entry) {
+        for (let k = 0; k < maxCom2 + 1; k++){
           if (this.state.user_board.length === 12){
             //Insert the free space in the middle
             this.state.user_board.push(new BoardEntry("Free Space","This space is completely free!",1,this.state.all_entries.length));
@@ -341,8 +358,8 @@ class Bingo extends React.Component {
             this.state.user_board.push(this.state.user_board_entries[rand7]);
             this.state.board_ids.push(this.state.user_board[this.state.user_board.length - 1].id);//store the id for later in the user functions
           }
-        }.bind(this));
-        console.log("Created the board: " + this.state.user_board);
+        }
+        console.log("Created the board: " + this.state.user_board, " length: " + this.state.user_board.length);
         this.setState({sample: "something"}); //random value change to tell react to re-render the page with our new stuff
 
     }.bind(this));
@@ -362,17 +379,7 @@ class Bingo extends React.Component {
   addUser(){
     //Once a name is typed in, make an entry in firebase for their information
     console.log(this.state.value,this.state.current_board_state,this.state.user_board);
-    const userCollection = db.collection('rooms').doc(this.state.room_id).collection("users");
-    userCollection.add({
-        name: this.state.value.trim(),
-        current_board_state: this.state.current_board_state,
-        player_board: this.state.board_ids,
-        best_odds: this.state.bestOdds
-      })
-      .then(function(docRef){
-        console.log("User written to firebase");
-        this.setState({user_id: docRef.id});//store the document id locally so we can get back to this document later
-        console.log("Doc ID found: " + docRef.id);
+    //const userCollection = db.collection('rooms').doc(this.state.room_id).collection("users");
 
         //Get the current player list so we don't overwrite it
         var currentNames = [];
@@ -395,7 +402,8 @@ class Bingo extends React.Component {
               player_scores: currentScores
             }).then(function(){
               // console.log("Winner successfully updated!");
-            }).catch(function(error){
+              this.setState({boardVisible: true}); //This displays the board, and prevents the user from istantly winning
+            }.bind(this)).catch(function(error){
               // The document probably doesn't exist.
               console.error("Error updating document: ", error);
             });
@@ -433,12 +441,11 @@ class Bingo extends React.Component {
                 console.log("Update received from users");
             }.bind(this));
             this.setState({userListener: listener});
+            this.setState({loading: false});
           }.bind(this))
           .catch(function(error) {
               console.log("Error getting document:", error);
           });
-
-      }.bind(this));
 
 
   }
@@ -452,38 +459,57 @@ class Bingo extends React.Component {
     //Enter was pressed or submit btn clicked. Decide what to do now
     event.preventDefault();
     console.log("form submitted...");
-    if (this.state.value.trim() === '' || this.state.value.trim() === null){
-      //The entered text was empty or only spaces
-      this.setState({alertVisible: true});
-      this.setState({alertText: "Field cannot be left blank."});
-    }
-    else if (this.state.value.trim().length > 30){
-      //Prevent people from abusing the database with extra long strings
-      this.setState({alertVisible: true});
-      this.setState({alertText: "Name is too long."});
-    }
-    else{
-      //Get all of the users in this room
-      const userRef = db.collection('rooms').doc(this.state.room_id).collection("users");
-      userRef.where("name","==",this.state.value.trim())
-        .get().then(function(querySnapshot) {
-        //Loop through each document in the database which each contains info for one square of a bingo board
-          querySnapshot.forEach(function(doc) {
+    this.setState({loading: true},function(){
+      //wait for state to be set
+      var userName = '';
+      if (this.state.value.trim() === '' || this.state.value.trim() === null){
+        //The entered text was empty or only spaces
+        this.setState({alertVisible: true});
+        this.setState({alertText: "Field cannot be left blank."});
+        this.setState({loading: false});
+      }
+      else if (this.state.value.trim().length > 30){
+        //Prevent people from abusing the database with extra long strings
+        this.setState({alertVisible: true});
+        this.setState({alertText: "Name is too long."});
+        this.setState({loading: false});
+      }
+      else{
+        //Get all of the users in this room
+        userName = this.state.value.trim();
+        const userRef = db.collection('rooms').doc(this.state.room_id);
+        var currentNames = [];
+        var currentScores = [];
+        console.log("about to search for users");
+        db.collection('rooms').doc(this.state.room_id).get()
+          .then(function(doc){
+            currentNames = doc.data().player_names;
+            currentScores = doc.data().player_scores;
 
-          }.bind(this));
-          if (querySnapshot.empty){
-            //Username is not taken, move forward
-            console.log("User allowed");
-            this.setState({boardVisible: true});
-            this.addUser();
-          }
-          else{
-            this.setState({alertVisible: true});
-            this.setState({alertText: "Name is already taken in this current room."});
-          }
+            console.log("got users" + currentNames, " input: " + userName);
+            // console.log(currentNames.includes("" + userName));
+            var userFound = false;
+            currentNames.forEach(function(name, index){
+              if (name === userName){
+                userFound = true;
+              }
+            }.bind(this));
+            //Check if name already exists
+            if (!userFound){
+              //Username is not taken, move forward
+              console.log("User allowed");
+              this.addUser();
+            }
+            else{
+              this.setState({alertVisible: true});
+              this.setState({alertText: "Name is already taken in this current room."});
+              this.setState({loading: false});
+            }
 
-      }.bind(this));
-    }
+        }.bind(this));
+      }
+
+    }.bind(this));
   }
 
   checkBingo(){
@@ -530,18 +556,6 @@ class Bingo extends React.Component {
       this.setState({bestOdds : maxOdds},
         function(){
           //SetState completed
-
-          //Also tell firebase that an option was selected
-          const userInfoRef = db.collection('rooms').doc(this.state.room_id).collection("users").doc(this.state.user_id);
-          userInfoRef.update({
-            current_board_state: this.state.current_board_state,
-            best_odds: this.state.bestOdds
-          }).then(function(){
-            console.log("Document successfully updated!");
-          }).catch(function(error){
-            // The document probably doesn't exist.
-            console.error("Error updating document: ", error);
-          });
 
           //Get the current scores of all players so we don't ruin any data by updating
           var currentNames = [];
@@ -629,27 +643,6 @@ class Bingo extends React.Component {
       // The document probably doesn't exist.
       console.error("Error updating document: ", error);
     });
-
-
-    //Remove all the users from firebase so we can start a new game
-    var documentList = [];
-    db.collection('rooms').doc(this.state.room_id).collection("users").get()
-    .then(function(querySnapshot) {
-        querySnapshot.forEach(function(doc) {
-            // doc.data() is never undefined for query doc snapshots
-            documentList.push(doc.id); //Store all the documents that are old
-          }.bind(this));
-
-            //Remove old info from the database
-            documentList.forEach(function(docID){
-                db.collection('rooms').doc(this.state.room_id).collection("users").doc(docID)
-                  .delete().then(function() {
-                    console.log("Document successfully deleted!");
-                }).catch(function(error) {
-                    console.error("Error removing document: ", error);
-                });
-            }.bind(this));
-    }.bind(this));
   }
 
   moveToUpload(){
@@ -669,6 +662,7 @@ class Bingo extends React.Component {
         <header className="App-header">Real-Time Bingo Online <p className="subtitle">Welcome to: {this.state.room_name}</p>
           <p className="subtitle">To let others join, simply provide this link: {window.location.href}</p>
         </header>
+        <div className="cover-container" style={{visibility: (this.state.loading ? "visible" : "hidden")}}></div>
         <div className="mainPage">
           {this.state.boardVisible && (<div className="bingoBoard">
             {this.state.user_board.map((entry,id) =>
@@ -707,7 +701,7 @@ class Bingo extends React.Component {
             </Table>
           </div>)}
         </div>
-        <Button className="uploadBtn" variant="secondary" onClick={this.moveToUpload}>
+        <Button className="uploadBtn" style={{visibility: "hidden"}} variant="secondary" onClick={this.moveToUpload}>
           Upload Bingo Data
         </Button>
         <Modal show={this.state.game_over} onHide={this.handleClose} animation={false} centered>
