@@ -110,41 +110,85 @@ class Bingo extends React.Component {
     this.handleBingoWin = this.handleBingoWin.bind(this);
     this.handleClose = this.handleClose.bind(this);
     this.moveToUpload = this.moveToUpload.bind(this);
+    this.getBingoEntries = this.getBingoEntries.bind(this);
+  }
+
+  getBingoEntries(){
+    //Check if we locally stored any entries (entries are deleted after 24 hours)
+    if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) > Date.now() - localStorage.getItem('timestamp')){
+      if (localStorage.getItem('ultra_rare_entries') !== null && localStorage.getItem('ultra_rare_entries') !== '')
+        this.setState({ultra_rare_entries: JSON.parse(localStorage.getItem('ultra_rare_entries'))});
+      if (localStorage.getItem('common_entries') !== null && localStorage.getItem('common_entries') !== '')
+        this.setState({common_entries: JSON.parse(localStorage.getItem('common_entries'))});
+      if (localStorage.getItem('uncommon_entries') !== null && localStorage.getItem('uncommon_entries') !== '')
+        this.setState({uncommon_entries: JSON.parse(localStorage.getItem('uncommon_entries'))});
+      if (localStorage.getItem('rare_entries') !== null && localStorage.getItem('rare_entries') !== '')
+        this.setState({rare_entries: JSON.parse(localStorage.getItem('rare_entries'))});
+      if (localStorage.getItem('all_entries') !== null && localStorage.getItem('all_entries') !== '')
+        this.setState({all_entries: JSON.parse(localStorage.getItem('all_entries'))},
+        //wait for state to finish setting
+        function(){
+          this.generateBingoEntries();
+        }.bind(this)
+      );
+      // this.generateBingoEntries();
+      console.log("saved data :)");
+    }
+    else {
+      if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) <= Date.now() - localStorage.getItem('timestamp')){
+        localStorage.removeItem("all_entries");
+        localStorage.removeItem("common_entries");
+        localStorage.removeItem("uncommon_entries");
+        localStorage.removeItem("rare_entries");
+        localStorage.removeItem("ultra_rare_entries");
+        localStorage.removeItem("timestamp");
+        console.log("deleted old cache");
+      }
+      console.log("used data :(");
+      //Generate a list of entries to populate the bingo board
+      const entryRef = db.collection('rooms').doc(this.state.room_id).collection("board_entries");
+      entryRef.get().then(function(querySnapshot) {
+        //Loop through each document in the database which each contains info for one square of a bingo board
+          querySnapshot.forEach(function(doc) {
+              // doc.data() is never undefined for query doc snapshots
+              var data = doc.data();
+              //Store board info locally so we can query the data without using firebase quotas
+              var entry = new BoardEntry(data.name,data.description,data.rarity, data.id);
+              this.state.all_entries.push(entry);
+              switch(entry.rarity){
+                case 1:
+                  this.state.common_entries.push(entry);
+                  break;
+                case 2:
+                  this.state.uncommon_entries.push(entry);
+                  break;
+                case 3:
+                  this.state.rare_entries.push(entry);
+                  break;
+                case 4:
+                  this.state.ultra_rare_entries.push(entry);
+                  break;
+                default:
+                  console.log("bad rarity found :( ");
+                  break;
+              }
+          }.bind(this));
+
+          localStorage.setItem('all_entries', JSON.stringify(this.state.all_entries));
+          localStorage.setItem('common_entries', JSON.stringify(this.state.common_entries));
+          localStorage.setItem('uncommon_entries', JSON.stringify(this.state.uncommon_entries));
+          localStorage.setItem('rare_entries', JSON.stringify(this.state.rare_entries));
+          localStorage.setItem('ultra_rare_entries', this.state.ultra_rare_entries);
+          let timestamp = Date.now();
+          localStorage.setItem('timestamp', timestamp);
+          this.generateBingoEntries();
+        }.bind(this));
+    }
   }
 
   generateBingoEntries(){
     //Check if the user has a previous board stored in their cache
     //TODO
-
-
-    //Generate a list of entries to populate the bingo board
-    const entryRef = db.collection('rooms').doc(this.state.room_id).collection("board_entries");
-    entryRef.get().then(function(querySnapshot) {
-      //Loop through each document in the database which each contains info for one square of a bingo board
-        querySnapshot.forEach(function(doc) {
-            // doc.data() is never undefined for query doc snapshots
-            var data = doc.data();
-            //Store board info locally so we can query the data without using firebase quotas
-            var entry = new BoardEntry(data.name,data.description,data.rarity, data.id);
-            this.state.all_entries.push(entry);
-            switch(entry.rarity){
-              case 1:
-                this.state.common_entries.push(entry);
-                break;
-              case 2:
-                this.state.uncommon_entries.push(entry);
-                break;
-              case 3:
-                this.state.rare_entries.push(entry);
-                break;
-              case 4:
-                this.state.ultra_rare_entries.push(entry);
-                break;
-              default:
-                console.log("bad rarity found :( ");
-                break;
-            }
-        }.bind(this));
 
         console.log("All entries:" + this.state.all_entries, "One entry: " + this.state.all_entries[0]);
         //Retreive random entries for the user's bingo board
@@ -362,14 +406,14 @@ class Bingo extends React.Component {
         console.log("Created the board: " + this.state.user_board, " length: " + this.state.user_board.length);
         this.setState({sample: "something"}); //random value change to tell react to re-render the page with our new stuff
 
-    }.bind(this));
+
   }
 
   componentDidMount(){
     //This method runs when the page is configured by react.
     //This helps to avoid spamming firebase with requests while the page is loading
     console.log("Page mounted...");
-    this.generateBingoEntries();
+    this.getBingoEntries();
   }
   componentWillUnmount(){
     console.log("Page unmounting...");
@@ -434,7 +478,7 @@ class Bingo extends React.Component {
                       else{
                         this.setState({users : users});
                       }
-                    }.bind(this))
+                    }.bind(this));
 
                 }.bind(this));
 
