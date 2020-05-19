@@ -4,6 +4,8 @@ This project uses a few resources. You'll need to install the following:
 * node installation https://nodejs.org/en/
 * react router https://codeburst.io/getting-started-with-react-router-5c978f70df91
   * <code>npm install react-router-dom </code>
+* Bootstrap for react https://react-bootstrap.github.io/getting-started/introduction/
+  * <code> npm install react-bootstrap bootstrap</code>
 * react csv reader https://www.npmjs.com/package/react-csv-reader
   * <code>npm i react-csv-reader</code>
 * react csv writer https://www.npmjs.com/package/react-csv
@@ -51,8 +53,8 @@ This project uses a few resources. You'll need to install the following:
  * Save the project
  * Run <code>npm run build </code> to compile the project
  * Run <code>firebase deploy </code> to push the project live online
-  * To remove the site from being public do <code>firebase hosting:disable </code>
-    * This does not delete the host, it just takes down your link. if you deploy again it will be live again
+    * To remove the site from being public do <code>firebase hosting:disable </code>
+      * This does not delete the host, it just takes down your link. if you deploy again it will be live again
 
 
 
