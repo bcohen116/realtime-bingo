@@ -131,10 +131,10 @@ class Bingo extends React.Component {
           this.generateBingoEntries();
         }.bind(this)
       );
-      // this.generateBingoEntries();
       console.log("saved data :)");
     }
     else {
+      //Cache is old or we have no cache, go out to firebase to get the updated info
       if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) <= Date.now() - localStorage.getItem('timestamp')){
         localStorage.removeItem("all_entries");
         localStorage.removeItem("common_entries");
@@ -174,6 +174,7 @@ class Bingo extends React.Component {
               }
           }.bind(this));
 
+          //Save everything we just did in cache so we can reduce firebase data usage by database size amount (100 db entries is 100 data reads)
           localStorage.setItem('all_entries', JSON.stringify(this.state.all_entries));
           localStorage.setItem('common_entries', JSON.stringify(this.state.common_entries));
           localStorage.setItem('uncommon_entries', JSON.stringify(this.state.uncommon_entries));
@@ -190,6 +191,7 @@ class Bingo extends React.Component {
     //Check if the user has a previous board stored in their cache
     //TODO
 
+        //We have all the data, now choose which ones to use for the player bingo board
         console.log("All entries:" + this.state.all_entries, "One entry: " + this.state.all_entries[0]);
         //Retreive random entries for the user's bingo board
         var extraPicks = 0; //If the database doesnt have a rarity type, use this to compensate
