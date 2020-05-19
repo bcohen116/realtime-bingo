@@ -39,19 +39,21 @@ This project uses a few resources. You'll need to install the following:
     * **If you do not do this, the website will not load because of how React works**
   * Make sure the project is up to date with a <code>npm run build </code>
   * Finally, do <code> firebase deploy </code> to push it live on the web
-  
+
  ## To update the site:
  ### Locally
  * Save the project
  * Run <code> npm start</code>
  * The project will auto open in your default browser when it is ready
  * **In local mode, changes are pushed live immediately after you save a file in the project**
- 
+
  ### Hosted on Firebase:
  * Save the project
  * Run <code>npm run build </code> to compile the project
  * Run <code>firebase deploy </code> to push the project live online
-  
+  * To remove the site from being public do <code>firebase hosting:disable </code>
+    * This does not delete the host, it just takes down your link. if you deploy again it will be live again
+
 
 
 
