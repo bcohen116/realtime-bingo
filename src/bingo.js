@@ -2,7 +2,7 @@ import React from 'react';
 import logo from './logo.svg';
 import './App.css';
 import './bingo.css';
-import {Button, Alert, Table, Modal} from 'react-bootstrap';
+import {Button, Alert, Table, Modal, Spinner} from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {db} from './index';
 import firebase from './index'
@@ -52,22 +52,6 @@ var entryConverter = {
       return new BoardEntry(data.name, data.description, data.rarity, data.id)
   }
 }
-// var userConverter = {
-//   toFirestore: function(entry) {
-//           return {
-//               name: entry.name,
-//               current_board_state: entry.current_board_state,
-//               player_board: entry.player_board: {entry.player_board.name,
-//                               entry.player_board.description,
-//                               entry.player_board.rarity,
-//                               entry.player_board.id}
-//               }
-//       },
-//   fromFirestore: function(snapshot, options){
-//       const data = snapshot.data(options);
-//       return new BoardEntry(data.name, data.description, data.rarity, data.id)
-//   }
-// }
 
 class Bingo extends React.Component {
   //Props extracts info from the url
@@ -111,80 +95,109 @@ class Bingo extends React.Component {
     this.handleClose = this.handleClose.bind(this);
     this.moveToUpload = this.moveToUpload.bind(this);
     this.getBingoEntries = this.getBingoEntries.bind(this);
+    this.waitFor = this.waitFor.bind(this);
   }
 
+  waitFor(conditionFunction) {
+
+  const poll = resolve => {
+    if(conditionFunction()) resolve();
+    else setTimeout(_ => poll(resolve), 400);
+  }
+
+  return new Promise(poll);
+}
+
   getBingoEntries(){
-    //Check if we locally stored any entries (entries are deleted after 24 hours)
-    if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) > Date.now() - localStorage.getItem('timestamp')){
-      if (localStorage.getItem('ultra_rare_entries') !== null && localStorage.getItem('ultra_rare_entries') !== '')
-        this.setState({ultra_rare_entries: JSON.parse(localStorage.getItem('ultra_rare_entries'))});
-      if (localStorage.getItem('common_entries') !== null && localStorage.getItem('common_entries') !== '')
-        this.setState({common_entries: JSON.parse(localStorage.getItem('common_entries'))});
-      if (localStorage.getItem('uncommon_entries') !== null && localStorage.getItem('uncommon_entries') !== '')
-        this.setState({uncommon_entries: JSON.parse(localStorage.getItem('uncommon_entries'))});
-      if (localStorage.getItem('rare_entries') !== null && localStorage.getItem('rare_entries') !== '')
-        this.setState({rare_entries: JSON.parse(localStorage.getItem('rare_entries'))});
-      if (localStorage.getItem('all_entries') !== null && localStorage.getItem('all_entries') !== '')
-        this.setState({all_entries: JSON.parse(localStorage.getItem('all_entries'))},
-        //wait for state to finish setting
-        function(){
-          this.generateBingoEntries();
-        }.bind(this)
-      );
-      console.log("saved data :)");
-    }
-    else {
-      //Cache is old or we have no cache, go out to firebase to get the updated info
-      if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) <= Date.now() - localStorage.getItem('timestamp')){
-        localStorage.removeItem("all_entries");
-        localStorage.removeItem("common_entries");
-        localStorage.removeItem("uncommon_entries");
-        localStorage.removeItem("rare_entries");
-        localStorage.removeItem("ultra_rare_entries");
-        localStorage.removeItem("timestamp");
-        console.log("deleted old cache");
-      }
-      console.log("used data :(");
-      //Generate a list of entries to populate the bingo board
-      const entryRef = db.collection('rooms').doc(this.state.room_id).collection("board_entries");
-      entryRef.get().then(function(querySnapshot) {
-        //Loop through each document in the database which each contains info for one square of a bingo board
-          querySnapshot.forEach(function(doc) {
-              // doc.data() is never undefined for query doc snapshots
-              var data = doc.data();
-              //Store board info locally so we can query the data without using firebase quotas
-              var entry = new BoardEntry(data.name,data.description,data.rarity, data.id);
-              this.state.all_entries.push(entry);
-              switch(entry.rarity){
-                case 1:
-                  this.state.common_entries.push(entry);
-                  break;
-                case 2:
-                  this.state.uncommon_entries.push(entry);
-                  break;
-                case 3:
-                  this.state.rare_entries.push(entry);
-                  break;
-                case 4:
-                  this.state.ultra_rare_entries.push(entry);
-                  break;
-                default:
-                  console.log("bad rarity found :( ");
-                  break;
+    //Check if the user has firebase auth (prevent trying to generate info before we have access to it which would cause no board to show up)
+    console.log("Retreieved auth info: " + window._USERLOGGED);
+    // while (window._USERLOGGED === 'No'){
+    //   this.setState({loading: true});
+    // }
+    this.setState({loading: true},
+      function(){
+        this.waitFor(_ => window._USERLOGGED === 'Yes')
+          .then(function() {
+            console.log('User has permission now!');
+            this.setState({loading: false});
+
+            //Check if we locally stored any entries (entries are deleted after 24 hours)
+            if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) > Date.now() - localStorage.getItem('timestamp')){
+              if (localStorage.getItem('ultra_rare_entries') !== null && localStorage.getItem('ultra_rare_entries') !== '')
+                this.setState({ultra_rare_entries: JSON.parse(localStorage.getItem('ultra_rare_entries'))});
+              if (localStorage.getItem('common_entries') !== null && localStorage.getItem('common_entries') !== '')
+                this.setState({common_entries: JSON.parse(localStorage.getItem('common_entries'))});
+              if (localStorage.getItem('uncommon_entries') !== null && localStorage.getItem('uncommon_entries') !== '')
+                this.setState({uncommon_entries: JSON.parse(localStorage.getItem('uncommon_entries'))});
+              if (localStorage.getItem('rare_entries') !== null && localStorage.getItem('rare_entries') !== '')
+                this.setState({rare_entries: JSON.parse(localStorage.getItem('rare_entries'))});
+              if (localStorage.getItem('all_entries') !== null && localStorage.getItem('all_entries') !== '')
+                this.setState({all_entries: JSON.parse(localStorage.getItem('all_entries'))},
+                //wait for state to finish setting
+                function(){
+                  this.generateBingoEntries();
+                }.bind(this)
+              );
+              console.log("saved data :)");
+            }
+            else {
+              //Cache is old or we have no cache, go out to firebase to get the updated info
+              if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) <= Date.now() - localStorage.getItem('timestamp')){
+                localStorage.removeItem("all_entries");
+                localStorage.removeItem("common_entries");
+                localStorage.removeItem("uncommon_entries");
+                localStorage.removeItem("rare_entries");
+                localStorage.removeItem("ultra_rare_entries");
+                localStorage.removeItem("timestamp");
+                console.log("deleted old cache");
               }
+              console.log("used data :(");
+              //Generate a list of entries to populate the bingo board
+              const entryRef = db.collection('rooms').doc(this.state.room_id).collection("board_entries");
+              entryRef.get().then(function(querySnapshot) {
+                //Loop through each document in the database which each contains info for one square of a bingo board
+                  querySnapshot.forEach(function(doc) {
+                      // doc.data() is never undefined for query doc snapshots
+                      var data = doc.data();
+                      //Store board info locally so we can query the data without using firebase quotas
+                      var entry = new BoardEntry(data.name,data.description,data.rarity, data.id);
+                      this.state.all_entries.push(entry);
+                      switch(entry.rarity){
+                        case 1:
+                          this.state.common_entries.push(entry);
+                          break;
+                        case 2:
+                          this.state.uncommon_entries.push(entry);
+                          break;
+                        case 3:
+                          this.state.rare_entries.push(entry);
+                          break;
+                        case 4:
+                          this.state.ultra_rare_entries.push(entry);
+                          break;
+                        default:
+                          console.log("bad rarity found :( ");
+                          break;
+                      }
+                  }.bind(this));
+
+                  //Save everything we just did in cache so we can reduce firebase data usage by database size amount (100 db entries is 100 data reads)
+                  localStorage.setItem('all_entries', JSON.stringify(this.state.all_entries));
+                  localStorage.setItem('common_entries', JSON.stringify(this.state.common_entries));
+                  localStorage.setItem('uncommon_entries', JSON.stringify(this.state.uncommon_entries));
+                  localStorage.setItem('rare_entries', JSON.stringify(this.state.rare_entries));
+                  localStorage.setItem('ultra_rare_entries', this.state.ultra_rare_entries);
+                  let timestamp = Date.now();
+                  localStorage.setItem('timestamp', timestamp);
+                  this.generateBingoEntries();
+                }.bind(this));
+            }
           }.bind(this));
 
-          //Save everything we just did in cache so we can reduce firebase data usage by database size amount (100 db entries is 100 data reads)
-          localStorage.setItem('all_entries', JSON.stringify(this.state.all_entries));
-          localStorage.setItem('common_entries', JSON.stringify(this.state.common_entries));
-          localStorage.setItem('uncommon_entries', JSON.stringify(this.state.uncommon_entries));
-          localStorage.setItem('rare_entries', JSON.stringify(this.state.rare_entries));
-          localStorage.setItem('ultra_rare_entries', this.state.ultra_rare_entries);
-          let timestamp = Date.now();
-          localStorage.setItem('timestamp', timestamp);
-          this.generateBingoEntries();
-        }.bind(this));
-    }
+
+      }.bind(this));
+
+
   }
 
   generateBingoEntries(){
@@ -708,7 +721,7 @@ class Bingo extends React.Component {
         <header className="App-header">Real-Time Bingo Online <p className="subtitle">Welcome to: {this.state.room_name}</p>
           <p className="subtitle">To let others join, simply provide this link: {window.location.href}</p>
         </header>
-        <div className="cover-container" style={{visibility: (this.state.loading ? "visible" : "hidden")}}></div>
+        <div className="cover-container" style={{visibility: (this.state.loading ? "visible" : "hidden")}}><Spinner className="loadingSpinner" animation="border" variant="danger" /> <p style={{color:"white"}}>Loading... please wait :)</p></div>
         <div className="mainPage">
           {this.state.boardVisible && (<div className="bingoBoard">
             {this.state.user_board.map((entry,id) =>

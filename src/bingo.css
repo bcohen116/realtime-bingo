@@ -19,6 +19,12 @@
   margin-top: 10vh;
 }
 
+.loadingSpinner {
+  display: block;
+    margin-left: auto;
+    margin-right: auto
+}
+
 button.createBtn {
   font-size: calc(22px + 2vmin);
   height: 15vh;

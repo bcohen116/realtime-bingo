@@ -30,7 +30,7 @@ firebase.analytics();
 export const db = firebase.firestore();
 export default firebase;
 
-
+window._USERLOGGED = 'No';
 //Give user permission to access the data
 firebase.auth().signInAnonymously().catch(function(error) {
   // Handle Errors here.
@@ -45,6 +45,8 @@ firebase.auth().onAuthStateChanged(function(user) {
     var isAnonymous = user.isAnonymous;
     var uid = user.uid;
     console.log("User signed in");
+    window._USERLOGGED = 'Yes';
+    console.log("window variable set: " + window._USERLOGGED);
   } else {
     // User is signed out.
 
