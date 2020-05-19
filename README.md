@@ -26,6 +26,9 @@ This project uses a few resources. You'll need to install the following:
   * Fill in the information in the new file with the info you got from the config section earlier
 * On the left hand side, go to the database tab
   * Create a **Firestore** database
+    * Go into the **Rules** tab of the database and change the line <code>allow read, write: if false </code> to <code>allow read, write: if request.auth.uid != null; </code>
+* On the left hand side, go to ** Authentication**
+  * Go to the **Sign-in Method** tab and enable "Anonymous checkin"
 * On the left side panel again, go to hosting
   * Connect your web app you configured earlier to link with the hosting
 * After turning that on, open a terminal in the same location you installed all the npm libraries
