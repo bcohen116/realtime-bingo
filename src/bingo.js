@@ -82,7 +82,8 @@ class Bingo extends React.Component {
       users_unsorted: [],
       game_over: false,
       winner_name: '',
-      loading: false
+      loading: false,
+      victoryAudio: new Audio("/win-sound.mp3")
     };
     console.log("Room name received: " + this.state.room_name, ", ID received: " + this.state.room_id);
     this.generateBingoEntries = this.generateBingoEntries.bind(this);
@@ -256,7 +257,6 @@ class Bingo extends React.Component {
         }
         else{
           //Not enough rare options in the database, tell the next category to use 2 extra
-          console.log("spot 6");
           extraPicks += 2;
         }
 
@@ -487,7 +487,8 @@ class Bingo extends React.Component {
                     function(){
                       if (doc.data().winner === true){
                         this.state.userListener(); //stop listening to users table to save data usage
-
+                        this.state.victoryAudio.play();
+                        console.log("play sound...");
                         //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
                       }
                       else{
@@ -688,6 +689,8 @@ class Bingo extends React.Component {
     //Bingo btn was pressed, you win!
     console.log("You got Bingo!");
     this.state.userListener(); //stop listening to users table to save data usage
+    this.state.victoryAudio.play();
+    console.log("play sound...");
 
 
     db.collection('rooms').doc(this.state.room_id).update({
