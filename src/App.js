@@ -85,7 +85,7 @@ class NameForm extends React.Component {
               player_scores: [],
               winner: false,
               winner_name: '',
-              last_win: timestamp: firebase.firestore.FieldValue.serverTimestamp()
+              last_win: firebase.firestore.FieldValue.serverTimestamp()
             });
             console.log("Sent data to database for new room");
 
