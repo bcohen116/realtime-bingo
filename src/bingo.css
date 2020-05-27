@@ -1,3 +1,14 @@
+@keyframes shadow-pulse
+{
+     0% {
+          box-shadow: 0 0 0 0px rgba(0, 0, 0, 0.8);
+     }
+     100% {
+          box-shadow: 0 0 0 35px rgba(0, 0, 0, 0);
+     }
+}
+
+
 .bingoSquare {
 
 }
@@ -24,6 +35,10 @@
   display: block;
     margin-left: auto;
     margin-right: auto
+}
+
+.pulsate {
+  animation: shadow-pulse 1s infinite;
 }
 
 button.createBtn {
