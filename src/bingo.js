@@ -59,6 +59,7 @@ class Bingo extends React.Component {
       board_ids: [],
       boardVisible: false,
       current_board_state: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      all_board_states: [],
       user_id: '',
       active: [false,false,false,false,false,false,false,false,false,false,false,
       false,false,false,false,false,false,false,false,false,false,false,false,false,false],
@@ -154,53 +155,68 @@ class Bingo extends React.Component {
               .then(function(roomDoc) {
 
                 if (roomDoc.data().last_win !== null && JSON.parse(""+localStorage.getItem("cache_timestamp")) !== null
-                  && JSON.parse(""+localStorage.getItem("cache_timestamp")).seconds > (roomDoc.data().last_win.toDate().getTime() / 1000)){
+                  && JSON.parse(""+localStorage.getItem("cache_timestamp")).seconds >= Math.floor(roomDoc.data().last_win.toDate().getTime() / 1000)){
                   //Found cache for the current game, use this instead of making the user have to make a new name and board.
                   console.log("used cache to reuse board");
-                  this.setState({user_board: JSON.parse(localStorage.getItem("cached_board"))});
-                  this.setState({board_ids: JSON.parse(localStorage.getItem("cached_board_ids"))});
-                  this.setState({value: localStorage.getItem("user_name")});
-                  this.setState({active: JSON.parse(localStorage.getItem("active_state"))});
-                  this.setState({current_board_state: JSON.parse(localStorage.getItem("current_board_state"))});
-                  this.setState({bestOdds: localStorage.getItem("best_odds")});
+                  this.setState({user_board: JSON.parse(localStorage.getItem("cached_board"))},
+                    function(){
+                      this.setState({board_ids: JSON.parse(localStorage.getItem("cached_board_ids"))},function(){
+                          this.setState({value: localStorage.getItem("user_name")},function(){
+                            this.setState({active: JSON.parse(localStorage.getItem("active_state"))},
+                              function(){
+                                this.setState({current_board_state: JSON.parse(localStorage.getItem("current_board_state"))},function(){
+                                  //Wait for all of the states to be set, then do the rest
+                                  this.setState({bestOdds: localStorage.getItem("best_odds")},
+                                  function(){
+                                    //Set listeners that normally would be created in the addUser() function (which doesnt run in this case cause we are restoring the user info)
+                                    //Get realtime updates any time a player is added, or a score is updated
+                                    let listener = db.collection('rooms').doc(this.state.room_id)
+                                      .onSnapshot(function(doc) {
+                                        var users = [];
+                                            //Extract the data from firebase into one array
+                                            doc.data().player_names.forEach(function(name, index){
+                                              users.push({name: doc.data().player_names[index],
+                                                          best_odds: doc.data().player_scores[index]});
+                                            }.bind(this));
 
-                  //Set listeners that normally would be created in the addUser() function (which doesnt run in this case cause we are restoring the user info)
-                  //Get realtime updates any time a player is added, or a score is updated
-                  let listener = db.collection('rooms').doc(this.state.room_id)
-                    .onSnapshot(function(doc) {
-                      var users = [];
-                          //Extract the data from firebase into one array
-                          doc.data().player_names.forEach(function(name, index){
-                            users.push({name: doc.data().player_names[index],
-                                        best_odds: doc.data().player_scores[index]});
+                                        //save the data in local variables for use later
+                                        this.setState({users_unsorted: users},
+                                        function(){
+                                          //Sort the list by the player score for display on the "leaderboard" table
+                                          users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+                                          this.setState({winner_name: doc.data().winner_name})
+                                          this.setState({game_over: doc.data().winner},
+                                            function(){
+                                              if (doc.data().winner === true){
+                                                this.state.userListener(); //stop listening to users table to save data usage
+                                                this.state.victoryAudio.play();
+                                                console.log("play sound...");
+                                                localStorage.removeItem("cache_timestamp"); //force the cache to reset next game for the user board
+                                                //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
+                                              }
+                                              else{
+                                                this.setState({users : users},
+                                                  function(){
+                                                    //Wait for state to finish updating
+                                                    this.setState({all_board_states: doc.data().board_states !== undefined ? JSON.parse(doc.data().board_states) : []});
+                                                  }.bind(this));
+                                              }
+                                            }.bind(this));
+
+                                        }.bind(this));
+
+                                        console.log("Update received from users");
+                                    }.bind(this));
+                                    this.setState({userListener: listener});
+                                    this.setState({boardVisible: true}); //This displays the board
+                                  }.bind(this));
+                                }.bind(this));
+                              }.bind(this));
                           }.bind(this));
-
-                      //save the data in local variables for use later
-                      this.setState({users_unsorted: users},
-                      function(){
-                        //Sort the list by the player score for display on the "leaderboard" table
-                        users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
-                        this.setState({winner_name: doc.data().winner_name})
-                        this.setState({game_over: doc.data().winner},
-                          function(){
-                            if (doc.data().winner === true){
-                              this.state.userListener(); //stop listening to users table to save data usage
-                              this.state.victoryAudio.play();
-                              console.log("play sound...");
-                              localStorage.removeItem("cache_timestamp"); //force the cache to reset next game for the user board
-                              //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
-                            }
-                            else{
-                              this.setState({users : users});
-                            }
-                          }.bind(this));
-
                       }.bind(this));
+                    }.bind(this)
+                  );
 
-                      console.log("Update received from users");
-                  }.bind(this));
-                  this.setState({userListener: listener});
-                  this.setState({boardVisible: true}); //This displays the board
                 }
                 else{
                   //The cache is older than the last win, which means it's for the previous game and we don't want to use it
@@ -488,66 +504,94 @@ class Bingo extends React.Component {
         //Get the current player list so we don't overwrite it
         var currentNames = [];
         var currentScores = [];
+        var currentIds = [];
+        var currentStates = [];
         db.collection('rooms').doc(this.state.room_id).get()
           .then(function(doc){
-            currentNames = doc.data().player_names;
-            currentScores = doc.data().player_scores;
+            currentNames = doc.data().player_names !== undefined && doc.data().player_names.length
+              ? doc.data().player_names : [];
+            currentScores = doc.data().player_scores !== undefined && doc.data().player_scores.length
+              ? doc.data().player_scores : [];
+            currentIds = doc.data().board_ids !== undefined && doc.data().board_ids.length
+              ? JSON.parse(doc.data().board_ids) : [];
+            currentStates = doc.data().board_states !== undefined && doc.data().board_states.length
+              ? JSON.parse(doc.data().board_states) : [];
 
             //Add the new user we just made to a temporary array
             currentNames.push(this.state.value.trim());
             currentScores.push(0);
+            currentIds.push(this.state.board_ids);
+            currentStates.push(this.state.current_board_state);
 
-            //Send the temporary array to the database so everything is now up to date
-            //Also reset winner so that if someone previously won, a new game will start
-            db.collection('rooms').doc(this.state.room_id).update({
-              winner: false,
-              winner_name: '',
-              player_names: currentNames,
-              player_scores: currentScores
-            }).then(function(){
-              // console.log("Winner successfully updated!");
-              this.setState({boardVisible: true}); //This displays the board, and prevents the user from instantly winning
-            }.bind(this)).catch(function(error){
-              // The document probably doesn't exist.
-              console.error("Error updating document: ", error);
-            });
 
-            //Get realtime updates any time a player is added, or a score is updated
-            let listener = db.collection('rooms').doc(this.state.room_id)
-              .onSnapshot(function(doc) {
-                var users = [];
-                    //Extract the data from firebase into one array
-                    doc.data().player_names.forEach(function(name, index){
-                      users.push({name: doc.data().player_names[index],
-                                  best_odds: doc.data().player_scores[index]});
-                    }.bind(this));
+            if (JSON.stringify(currentNames).length + JSON.stringify(currentScores).length
+              + JSON.stringify(currentIds).length + JSON.stringify(currentStates).length > 1000000){
+              //Firestore documents are limited to 1,048,487 bytes of data, we should never hit this unless the room has hundreds of users at once
+              currentNames.pop();
+              currentScores.pop();
+              currentIds.pop();
+              currentStates.pop();
+              console.log("Too much data in this document... Preventing new user from being added");
+            }
+            else{
+              //Send the temporary array to the database so everything is now up to date
+              //Also reset winner so that if someone previously won, a new game will start
+              db.collection('rooms').doc(this.state.room_id).update({
+                winner: false,
+                winner_name: '',
+                player_names: currentNames,
+                player_scores: currentScores,
+                board_ids: ""+JSON.stringify(currentIds),
+                board_states: ""+JSON.stringify(currentStates)
+              }).then(function(){
+                //Get realtime updates any time a player is added, or a score is updated
+                let listener = db.collection('rooms').doc(this.state.room_id)
+                  .onSnapshot(function(doc) {
+                    var users = [];
+                        //Extract the data from firebase into one array
+                        doc.data().player_names.forEach(function(name, index){
+                          users.push({name: doc.data().player_names[index],
+                                      best_odds: doc.data().player_scores[index]});
+                        }.bind(this));
 
-                //save the data in local variables for use later
-                this.setState({users_unsorted: users},
-                function(){
-                  //Sort the list by the player score for display on the "leaderboard" table
-                  users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
-                  this.setState({winner_name: doc.data().winner_name})
-                  this.setState({game_over: doc.data().winner},
+                    //save the data in local variables for use later
+                    this.setState({users_unsorted: users},
                     function(){
-                      if (doc.data().winner === true){
-                        this.state.userListener(); //stop listening to users table to save data usage
-                        this.state.victoryAudio.play();
-                        console.log("play sound...");
-                        localStorage.removeItem("cache_timestamp"); //force the cache to reset next game for the user board
-                        //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
-                      }
-                      else{
-                        this.setState({users : users});
-                      }
+                      //Sort the list by the player score for display on the "leaderboard" table
+                      users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+                      this.setState({winner_name: doc.data().winner_name})
+                      this.setState({game_over: doc.data().winner},
+                        function(){
+                          if (doc.data().winner === true){
+                            this.state.userListener(); //stop listening to users table to save data usage
+                            this.state.victoryAudio.play();
+                            console.log("play sound...");
+                            localStorage.removeItem("cache_timestamp"); //force the cache to reset next game for the user board
+                            //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
+                          }
+                          else{
+                            this.setState({users : users},
+                              function(){
+                                //Wait for state to finish updating
+                                this.setState({all_board_states: JSON.parse(doc.data().board_states)});
+                              }.bind(this));
+                          }
+                        }.bind(this));
+
                     }.bind(this));
 
+                    console.log("Update received from users");
                 }.bind(this));
+                this.setState({userListener: listener});
+                this.setState({loading: false});
 
-                console.log("Update received from users");
-            }.bind(this));
-            this.setState({userListener: listener});
-            this.setState({loading: false});
+                this.setState({boardVisible: true}); //This displays the board, and prevents the user from instantly winning
+              }.bind(this)).catch(function(error){
+                // The document probably doesn't exist.
+                console.error("Error updating document: ", error);
+              });
+            }
+
           }.bind(this))
           .catch(function(error) {
               console.log("Error getting document:", error);
@@ -669,22 +713,26 @@ class Bingo extends React.Component {
           //Get the current scores of all players so we don't ruin any data by updating
           var currentNames = [];
           var currentScores = [];
+          var currentStates = [];
           db.collection('rooms').doc(this.state.room_id).get()
             .then(function(doc){
               currentNames = doc.data().player_names;
               currentScores = doc.data().player_scores;
+              currentStates = JSON.parse(doc.data().board_states);
 
               currentNames.forEach(function(name, index){
                 if (name === this.state.value.trim()){
                   //Update the player scores with the new value
                   currentScores[index] = this.state.bestOdds;
+                  currentStates[index] = this.state.current_board_state;
                 }
               }.bind(this));
 
               //Update the room document which is being listened to by the realtime listener
               //By updating this, the realtime listener only needs to read one document, instead of (# of users) * document
               db.collection('rooms').doc(this.state.room_id).update({
-                player_scores: currentScores
+                player_scores: currentScores,
+                board_states: ""+JSON.stringify(currentStates)
               }).then(function(){
                 // console.log("Winner successfully updated!");
               }).catch(function(error){
@@ -755,6 +803,8 @@ class Bingo extends React.Component {
       winner_name: this.state.value.trim(),
       player_names: [],
       player_scores: [],
+      board_ids: [],
+      board_states: [],
       last_win: firebase.firestore.FieldValue.serverTimestamp()
     }).then(function(){
       this.setState({game_over: true})
