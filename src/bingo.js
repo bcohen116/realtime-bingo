@@ -2,8 +2,9 @@ import React from 'react';
 import logo from './logo.svg';
 import './App.css';
 import './bingo.css';
-import {Button, Alert, Table, Modal, Spinner} from 'react-bootstrap';
+import {Button, Alert, Table, Modal, Spinner, OverlayTrigger , Tooltip} from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import { Link} from 'react-router-dom';
 import {db} from './index';
 import firebase from './index'
 
@@ -60,6 +61,7 @@ class Bingo extends React.Component {
       boardVisible: false,
       current_board_state: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
       all_board_states: [],
+      all_board_ids: [],
       user_id: '',
       active: [false,false,false,false,false,false,false,false,false,false,false,
       false,false,false,false,false,false,false,false,false,false,false,false,false,false],
@@ -70,9 +72,12 @@ class Bingo extends React.Component {
       userListener: null,
       users: [],
       users_unsorted: [],
+      user_viewing: "",
+      user_view_index: 0,
       game_over: false,
       winner_name: '',
       loading: false,
+      view_only: false,
       victoryAudio: new Audio("/win-sound.mp3")
     };
     console.log("Room name received: " + this.state.room_name, ", ID received: " + this.state.room_id);
@@ -88,6 +93,8 @@ class Bingo extends React.Component {
     this.getBingoEntries = this.getBingoEntries.bind(this);
     this.waitFor = this.waitFor.bind(this);
     this.checkCache = this.checkCache.bind(this);
+    this.showPlayer = this.showPlayer.bind(this);
+    this.inviteLink = this.inviteLink.bind(this);
   }
 
   waitFor(conditionFunction) {
@@ -160,10 +167,22 @@ class Bingo extends React.Component {
                   && JSON.parse(""+localStorage.getItem("cache_timestamp")).seconds >= Math.floor(roomDoc.data().last_win.toDate().getTime() / 1000)){
                   //Found cache for the current game, use this instead of making the user have to make a new name and board.
                   console.log("used cache to reuse board");
+                  if (localStorage.getItem('ultra_rare_entries') !== null && localStorage.getItem('ultra_rare_entries') !== '')
+                    this.setState({ultra_rare_entries: JSON.parse(localStorage.getItem('ultra_rare_entries'))});
+                  if (localStorage.getItem('common_entries') !== null && localStorage.getItem('common_entries') !== '')
+                    this.setState({common_entries: JSON.parse(localStorage.getItem('common_entries'))});
+                  if (localStorage.getItem('uncommon_entries') !== null && localStorage.getItem('uncommon_entries') !== '')
+                    this.setState({uncommon_entries: JSON.parse(localStorage.getItem('uncommon_entries'))});
+                  if (localStorage.getItem('rare_entries') !== null && localStorage.getItem('rare_entries') !== '')
+                    this.setState({rare_entries: JSON.parse(localStorage.getItem('rare_entries'))});
+                  if (localStorage.getItem('all_entries') !== null && localStorage.getItem('all_entries') !== '')
+                    this.setState({all_entries: JSON.parse(localStorage.getItem('all_entries'))});
+                  //Retreived board element info, now get the cached user board
                   this.setState({user_board: JSON.parse(localStorage.getItem("cached_board"))},
                     function(){
                       this.setState({board_ids: JSON.parse(localStorage.getItem("cached_board_ids"))},function(){
                           this.setState({value: localStorage.getItem("user_name")},function(){
+                            this.setState({user_viewing: this.state.value}); //Used for displaying who's board is being looked at
                             this.setState({active: JSON.parse(localStorage.getItem("active_state"))},
                               function(){
                                 this.setState({current_board_state: JSON.parse(localStorage.getItem("current_board_state"))},function(){
@@ -193,38 +212,51 @@ class Bingo extends React.Component {
                                             currentStates = doc.data().board_states !== undefined && doc.data().board_states.length
                                               ? JSON.parse(doc.data().board_states) : [];
 
-                                            //Search for bingo squares that other players have selected that this user has not yet
-                                            this.state.current_board_state.forEach(function(state, index){
-                                              if (state === 0){
-                                                //Found a bingo square on user's board that is unclicked, check if someone else has picked it
-                                                let idToCheck = this.state.board_ids[index];
-                                                let selectedCount = 0; //count of how many players have clicked this specific square
-                                                let i = -1;
-                                                currentIds.forEach(function(board, idx){
-                                                  while ((i = board.indexOf(idToCheck, i+1)) !== -1){
-                                                    //Found a board in the database (also including this user's board) that has this square.
-                                                    let indexState = currentStates[idx][i]; //Whether the bingo square has been clicked or not
-                                                    //Check if player has square selected
-                                                    if (indexState === 1){
-                                                      selectedCount++;
-                                                    }
-                                                  }
-                                                }.bind(this));
-                                                  if (selectedCount > 1){
-                                                    //At least 2 players have selected this square, now animate it to show this user they missed it
-                                                    let active_pulse_temp = this.state.active_pulse;
-                                                    active_pulse_temp[index] = true;
-                                                    this.setState({active_pulse: active_pulse_temp});
-                                                    console.log("square should animate");
-                                                  }
-                                                  else{
-                                                    // This square probably hasnt been picked yet, turn off any animations
-                                                    let active_pulse_temp = this.state.active_pulse;
-                                                    active_pulse_temp[index] = false;
-                                                    this.setState({active_pulse: active_pulse_temp});
-                                                  }
+                                            //Check if user is viewing someone that is not themselves
+                                            if (this.state.view_only){
+                                              //We are viewing someone else, update the screen for that and prevent animations
+                                              if (currentStates.length >= this.state.user_view_index)
+                                                this.setState({active: currentStates[this.state.user_view_index]});
+                                              else {
+                                                console.log("Game could be getting reset, there are not enough entries in the database");
                                               }
-                                            }.bind(this));
+                                            }
+                                            else{
+                                              //Search for bingo squares that other players have selected that this user has not yet
+                                              this.state.current_board_state.forEach(function(state, index){
+                                                if (state === 0){
+                                                  //Found a bingo square on user's board that is unclicked, check if someone else has picked it
+                                                  let idToCheck = this.state.board_ids[index];
+                                                  let selectedCount = 0; //count of how many players have clicked this specific square
+                                                  let i = -1;
+                                                  currentIds.forEach(function(board, idx){
+                                                    while ((i = board.indexOf(idToCheck, i+1)) !== -1){
+                                                      //Found a board in the database (also including this user's board) that has this square.
+                                                      let indexState = currentStates[idx][i]; //Whether the bingo square has been clicked or not
+                                                      //Check if player has square selected
+                                                      if (indexState === 1){
+                                                        selectedCount++;
+                                                      }
+                                                    }
+                                                  }.bind(this));
+                                                    if (selectedCount > 1){
+                                                      //At least 2 players have selected this square, now animate it to show this user they missed it
+                                                      let active_pulse_temp = this.state.active_pulse;
+                                                      active_pulse_temp[index] = true;
+                                                      this.setState({active_pulse: active_pulse_temp});
+                                                      console.log("square should animate");
+                                                    }
+                                                    else{
+                                                      // This square probably hasnt been picked yet, turn off any animations
+                                                      let active_pulse_temp = this.state.active_pulse;
+                                                      active_pulse_temp[index] = false;
+                                                      this.setState({active_pulse: active_pulse_temp});
+                                                    }
+                                                }
+                                              }.bind(this));
+                                            }
+
+
 
 
                                         //save the data in local variables for use later
@@ -247,6 +279,8 @@ class Bingo extends React.Component {
                                                   function(){
                                                     //Wait for state to finish updating
                                                     this.setState({all_board_states: doc.data().board_states !== undefined ? JSON.parse(doc.data().board_states) : []});
+                                                    this.setState({all_board_ids: doc.data().board_ids !== undefined ? JSON.parse(doc.data().board_ids) : []});
+
                                                   }.bind(this));
                                               }
                                             }.bind(this));
@@ -545,6 +579,7 @@ class Bingo extends React.Component {
   addUser(){
     //Once a name is typed in, make an entry in firebase for their information
     console.log(this.state.value,this.state.current_board_state,this.state.user_board);
+    this.setState({user_viewing: this.state.value});
     //const userCollection = db.collection('rooms').doc(this.state.room_id).collection("users");
 
         //Get the current player list so we don't overwrite it
@@ -610,37 +645,49 @@ class Bingo extends React.Component {
                     currentStates = doc.data().board_states !== undefined && doc.data().board_states.length
                       ? JSON.parse(doc.data().board_states) : [];
 
-                    //Search for bingo squares that other players have selected that this user has not yet
-                    this.state.current_board_state.forEach(function(state, index){
-                      if (state === 0){
-                        //Found a bingo square on user's board that is unclicked, check if someone else has picked it
-                        let idToCheck = this.state.board_ids[index];
-                        let selectedCount = 0; //count of how many players have clicked this specific square
-                        let i = -1;
-                        currentIds.forEach(function(board, idx){
-                          while ((i = board.indexOf(idToCheck, i+1)) !== -1){
-                            //Found a board in the database (also including this user's board) that has this square.
-                            let indexState = currentStates[idx][i]; //Whether the bingo square has been clicked or not
-                            //Check if player has square selected
-                            if (indexState === 1){
-                              selectedCount++;
-                            }
-                          }
-                        }.bind(this));
-                          if (selectedCount > 1){
-                            //At least 2 players have selected this square, now animate it to show this user they missed it
-                            let active_pulse_temp = this.state.active_pulse;
-                            active_pulse_temp[index] = true;
-                            this.setState({active_pulse: active_pulse_temp});
-                          }
-                          else{
-                            // This square probably hasnt been picked yet, turn off any animations
-                            let active_pulse_temp = this.state.active_pulse;
-                            active_pulse_temp[index] = false;
-                            this.setState({active_pulse: active_pulse_temp});
-                          }
+
+                    //Check if user is viewing someone that is not themselves
+                    if (this.state.view_only){
+                      //We are viewing someone else, update the screen for that and prevent animations
+                      if (currentStates.length >= this.state.user_view_index)
+                        this.setState({active: currentStates[this.state.user_view_index]});
+                      else {
+                        console.log("Game could be getting reset, there are not enough entries in the database");
                       }
-                    }.bind(this));
+                    }
+                    else{
+                      //Search for bingo squares that other players have selected that this user has not yet
+                      this.state.current_board_state.forEach(function(state, index){
+                        if (state === 0){
+                          //Found a bingo square on user's board that is unclicked, check if someone else has picked it
+                          let idToCheck = this.state.board_ids[index];
+                          let selectedCount = 0; //count of how many players have clicked this specific square
+                          let i = -1;
+                          currentIds.forEach(function(board, idx){
+                            while ((i = board.indexOf(idToCheck, i+1)) !== -1){
+                              //Found a board in the database (also including this user's board) that has this square.
+                              let indexState = currentStates[idx][i]; //Whether the bingo square has been clicked or not
+                              //Check if player has square selected
+                              if (indexState === 1){
+                                selectedCount++;
+                              }
+                            }
+                          }.bind(this));
+                            if (selectedCount > 1){
+                              //At least 2 players have selected this square, now animate it to show this user they missed it
+                              let active_pulse_temp = this.state.active_pulse;
+                              active_pulse_temp[index] = true;
+                              this.setState({active_pulse: active_pulse_temp});
+                            }
+                            else{
+                              // This square probably hasnt been picked yet, turn off any animations
+                              let active_pulse_temp = this.state.active_pulse;
+                              active_pulse_temp[index] = false;
+                              this.setState({active_pulse: active_pulse_temp});
+                            }
+                        }
+                      }.bind(this));
+                    }
 
                     //save the data in local variables for use later
                     this.setState({users_unsorted: users},
@@ -662,6 +709,7 @@ class Bingo extends React.Component {
                               function(){
                                 //Wait for state to finish updating
                                 this.setState({all_board_states: JSON.parse(doc.data().board_states)});
+                                this.setState({all_board_ids: doc.data().board_ids !== undefined ? JSON.parse(doc.data().board_ids) : []});
                               }.bind(this));
                           }
                         }.bind(this));
@@ -850,6 +898,84 @@ class Bingo extends React.Component {
     }
   }
 
+  showPlayer(event){
+    //This runs when a cell on the "users" table is clicked, we want to show them the board of the player they clicked
+    console.log("Clicked Cell, event: " + event.target.innerText);
+    if (this.state.user_viewing === event.target.innerText){
+      //We are already viewing this user, do nothing
+    }
+    else{
+      let userMap = this.state.users_unsorted.map(user => user.name); //get the list of users
+      let userExists = userMap.includes(event.target.innerText); //get the index of the user that got clicked
+      if (userExists){
+        //Name was found in the database, retreive board data for this user
+        let index = userMap.indexOf(event.target.innerText);
+        let playerBoardIds = this.state.all_board_ids[index];
+        let playerBoard = [];
+        for (let x = 0; x < playerBoardIds.length; x++){
+          //Retreive the data for each square of the user's bingo board
+          // let dataIndex = entryIdMap.indexOf(playerBoardIds[x]);
+          let dataIndex = null;
+          for (let y = 0; y < this.state.all_entries.length; y++){
+            if (this.state.all_entries[y].id === playerBoardIds[x]){
+              dataIndex = y;
+              break;
+            }
+            else if (playerBoardIds[x] === this.state.all_entries.length){
+              //This is the free space
+              dataIndex = -2;
+            }
+          }
+          if (dataIndex !== null){
+            if (dataIndex == -2){
+              //Add Free space
+              playerBoard.push(new BoardEntry("Free Space","This space is completely free!",1,this.state.all_entries.length));
+            }
+            else{
+              playerBoard.push(this.state.all_entries[dataIndex]);
+            }
+
+          }
+          else{
+            console.log("This should never happen, player's board has an ID that is not in the list of possible bingo squares");
+          }
+        }
+        //Update the UI with the clicked player's board
+        this.setState({user_board: playerBoard});
+        this.setState({active: this.state.all_board_states[index]});
+        this.setState({user_view_index: index});
+        this.setState({user_viewing: event.target.innerText});
+        if (this.state.value === event.target.innerText){
+          //This is the main user, allow for edits of page
+          this.setState({view_only: false});
+        }
+        else{
+          //render invisible div so people cant click things on other players' boards
+          this.setState({view_only: true});
+          this.setState({active_pulse: [false,false,false,false,false,false,false,false,false,false,false,
+          false,false,false,false,false,false,false,false,false,false,false,false,false,false]});//turn off animations
+        }
+      }
+      else{
+        console.log("Can't view: " + event.target.innerText + " user's board. Somehow the user is not in the database. This shouldn't be able to happen.");
+      }
+    }
+  }
+
+  inviteLink(){
+    // To let others join, simply provide this link: {window.location.href}
+    var textToCopy = "" + window.location.href;
+    //clipboard command requires a textarea so we make a temporary one
+    var textArea = document.createElement("textarea");
+    textArea.value = textToCopy;
+    document.body.appendChild(textArea);
+    textArea.select();
+    textArea.setSelectionRange(0, 99999); /*For mobile devices*/
+    document.execCommand("Copy");//Copy the link to this page to the clipboard
+    textArea.remove(); //Copied the text so remove the temporary textarea we no longer need
+    console.log("This window's link copied to clipboard");
+  }
+
   handleClose(){
     //Generate new board and take player to name screen
     window.location.reload(false);
@@ -921,15 +1047,29 @@ class Bingo extends React.Component {
       <p className="entryDescription">{entry.description}</p>
       </Button>
     ));
+
+    //Variables for tooltips
+    const tooltip = (
+      <Tooltip id="overlay-example">
+        URL copied to clipboard
+      </Tooltip>
+    );
     // console.log("rendered page");
     return(
       <div className="App">
         <header className="App-header">Real-Time Bingo Online <p className="subtitle">Welcome to: {this.state.room_name}</p>
-          <p className="subtitle">To let others join, simply provide this link: {window.location.href}</p>
+          <OverlayTrigger  trigger="click" placement="bottom" overlay={tooltip}>
+            <a className="inviteLink" onClick={this.inviteLink}>Invite Others</a>
+         </OverlayTrigger >
         </header>
         <div className="cover-container" style={{visibility: (this.state.loading ? "visible" : "hidden")}}><Spinner className="loadingSpinner" animation="border" variant="danger" /> <p style={{color:"white"}}>Loading... please wait :)</p></div>
         <div className="mainPage">
-          {this.state.boardVisible && (<div className="bingoBoard">
+          {this.state.boardVisible &&
+            (<div className="boardWrapper">
+            <p className="boardHeader">Viewing <span className="boardHeaderName">{this.state.user_viewing}</span>'s Board</p>
+            <div className="cover-container" style={{visibility: (this.state.view_only ? "visible" : "hidden")}}>
+            </div>
+            <div className="bingoBoard">
             {this.state.user_board.map((entry,id) =>
               <Button key={id} className={"bingoSquare " + (this.state.active[id] ? "active" : "normal") + " " + (this.state.active_pulse[id] ? "pulsate" : "normal")
                   } onClick={((e) => this.handleClick(e, id))} variant={(entry.rarity === 4) ? "outline-dark" : (entry.rarity === 3)
@@ -939,7 +1079,8 @@ class Bingo extends React.Component {
               </Button>
             )}
             {this.state.bestOdds >= 5 && (<Button className="bingoWinBtn" variant="outline-danger" onClick={this.handleBingoWin}>Bingo!</Button>)}
-          </div>)}
+          </div></div>)}
+
           {!this.state.boardVisible && (<form onSubmit={this.handleSubmit}>
             <div className="nameCreation">
               {this.state.alertVisible && (<Alert variant="danger">{this.state.alertText}</Alert>)}
@@ -950,7 +1091,7 @@ class Bingo extends React.Component {
           </form>)}
           {this.state.boardVisible && (<div className="playerList">
             <p style={{color: "white"}}>Bingo Betting and mode voting coming soon&trade;</p>
-            <Table striped bordered hover variant="dark">
+            <Table striped bordered hover variant="dark" >
               <thead>
                 <tr>
                   <th></th>
@@ -961,7 +1102,7 @@ class Bingo extends React.Component {
                 {this.state.users.map((user,id) =>
                   <tr key={id}>
                     <td>{user.best_odds}</td>
-                    <td>{user.name}</td>
+                    <td onClick={e => this.showPlayer(e)}>{user.name}</td>
                   </tr>
                 )}
               </tbody>

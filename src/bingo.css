@@ -3,6 +3,9 @@
      0% {
           box-shadow: 0 0 0 0px rgba(0, 0, 0, 0.8);
      }
+     33% {
+          box-shadow: 0 0 0 35px rgba(0, 0, 0, 0);
+     }
      100% {
           box-shadow: 0 0 0 35px rgba(0, 0, 0, 0);
      }
@@ -31,6 +34,23 @@
   margin-top: 10vh;
 }
 
+a.inviteLink {
+  position: absolute;
+  left: 0px;
+  margin-left: 1vw;
+  font-size: calc(10px + 1vmin);
+  color: blue;
+  text-decoration: underline;
+}
+p.boardHeader {
+  color: white;
+  font-size: calc(8px + 1vmin);
+}
+span.boardHeaderName {
+  color: red;
+  font-size: calc(8px + 1vmin);
+}
+
 .loadingSpinner {
   display: block;
     margin-left: auto;
@@ -38,7 +58,7 @@
 }
 
 .pulsate {
-  animation: shadow-pulse 1s infinite;
+  animation: shadow-pulse 3s infinite;
 }
 
 button.createBtn {
@@ -63,8 +83,8 @@ input.createInput {
 
 .mainPage {
   display: table;
-  width:98vw;
-  margin-top: 1vh;
+  width:97vw;
+  /* margin-top: 1vh; */
 }
 
 .playerList {
@@ -83,6 +103,9 @@ input.createInput {
   height: 100%;
   width:100%;
   position: absolute;
+}
+.boardWrapper {
+  position: relative;
 }
 
 @media screen and (max-width: 750px) {
