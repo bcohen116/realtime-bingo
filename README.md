@@ -1,3 +1,14 @@
+# What does this do?
+Ask me for the public URL, I'll gladly provide it. It is not listed here so it does not get spammed with bots and use up all of my data plan.
+* Easily upload data for generating Bingo boards with a CSV file
+* Generate Bingo boards randomly for each player
+* Play Bingo in real time against other people in the "online room"
+* Create rooms to invite your friends
+* View the other players' Bingo boards and how close they are to winning
+* Cache saving to optimize data usage as well as prevent data loss from accidentally closing the page
+* Play assistance, with indicators for Bingo squares other players have clicked, but you have not
+* Future plans for multiple modes like 4 corners, and "Bingo Betting" which will add more interactivity to the game
+
 # How to install
 This project uses a few resources. You'll need to install the following:
 * Download this repository
