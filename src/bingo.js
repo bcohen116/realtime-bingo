@@ -195,10 +195,12 @@ class Bingo extends React.Component {
                                       .onSnapshot(function(doc) {
                                         var users = [];
                                             //Extract the data from firebase into one array
+                                            // console.log("all users list order check: " + doc.data().player_names);
                                             doc.data().player_names.forEach(function(name, index){
                                               users.push({name: doc.data().player_names[index],
                                                           best_odds: doc.data().player_scores[index]});
                                             }.bind(this));
+                                            // console.log("Check 2: " + JSON.stringify(users));
                                             var currentNames = [];
                                             var currentScores = [];
                                             var currentIds = [];
@@ -262,8 +264,11 @@ class Bingo extends React.Component {
                                         //save the data in local variables for use later
                                         this.setState({users_unsorted: users},
                                         function(){
+                                          // console.log("Check 3: " + JSON.stringify(this.state.users_unsorted));
                                           //Sort the list by the player score for display on the "leaderboard" table
-                                          users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+                                          let usersTemp = JSON.parse(JSON.stringify(users)); //Using this because users_unsorted was getting modified by the following for some reason
+                                          usersTemp.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+                                          // console.log("Check 4: " + JSON.stringify(users), "Check 4 Temp: " + JSON.stringify(usersTemp));
                                           this.setState({winner_name: doc.data().winner_name})
                                           this.setState({game_over: doc.data().winner},
                                             function(){
@@ -275,7 +280,7 @@ class Bingo extends React.Component {
                                                 //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
                                               }
                                               else{
-                                                this.setState({users : users},
+                                                this.setState({users : usersTemp},
                                                   function(){
                                                     //Wait for state to finish updating
                                                     this.setState({all_board_states: doc.data().board_states !== undefined ? JSON.parse(doc.data().board_states) : []});
@@ -693,7 +698,8 @@ class Bingo extends React.Component {
                     this.setState({users_unsorted: users},
                     function(){
                       //Sort the list by the player score for display on the "leaderboard" table
-                      users.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+                      let usersTemp = JSON.parse(JSON.stringify(users)); //Using this because users_unsorted was getting modified by the following for some reason
+                      usersTemp.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
                       this.setState({winner_name: doc.data().winner_name})
                       this.setState({game_over: doc.data().winner},
                         function(){
@@ -705,7 +711,7 @@ class Bingo extends React.Component {
                             //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
                           }
                           else{
-                            this.setState({users : users},
+                            this.setState({users : usersTemp},
                               function(){
                                 //Wait for state to finish updating
                                 this.setState({all_board_states: JSON.parse(doc.data().board_states)});
@@ -905,11 +911,19 @@ class Bingo extends React.Component {
       //We are already viewing this user, do nothing
     }
     else{
-      let userMap = this.state.users_unsorted.map(user => user.name); //get the list of users
+      // console.log("unsorted users: " + JSON.stringify(this.state.users_unsorted));
+      let userMap = [];
+      this.state.users_unsorted.forEach(function(user, index){
+        userMap.push(user.name);
+      }.bind(this));
+      // let userMap = this.state.users_unsorted.map(user => user.name); //get the list of users
       let userExists = userMap.includes(event.target.innerText); //get the index of the user that got clicked
       if (userExists){
         //Name was found in the database, retreive board data for this user
         let index = userMap.indexOf(event.target.innerText);
+        // console.log("Users list: " + userMap);
+        // console.log("unsorted users2: " + JSON.stringify(this.state.users_unsorted));
+        // console.log("User index: " + index);
         let playerBoardIds = this.state.all_board_ids[index];
         let playerBoard = [];
         for (let x = 0; x < playerBoardIds.length; x++){
