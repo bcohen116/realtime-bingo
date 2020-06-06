@@ -592,7 +592,9 @@ class Bingo extends React.Component {
         var currentScores = [];
         var currentIds = [];
         var currentStates = [];
-        db.collection('rooms').doc(this.state.room_id).get()
+        let roomIdRef = db.collection('rooms').doc(this.state.room_id);
+        db.runTransaction(function(transaction) {
+          return transaction.get(roomIdRef)
           .then(function(doc){
             currentNames = doc.data().player_names !== undefined && doc.data().player_names.length
               ? doc.data().player_names : [];
@@ -622,122 +624,128 @@ class Bingo extends React.Component {
             else{
               //Send the temporary array to the database so everything is now up to date
               //Also reset winner so that if someone previously won, a new game will start
-              db.collection('rooms').doc(this.state.room_id).update({
+              transaction.update(roomIdRef,{
                 winner: false,
                 winner_name: '',
                 player_names: currentNames,
                 player_scores: currentScores,
                 board_ids: ""+JSON.stringify(currentIds),
                 board_states: ""+JSON.stringify(currentStates)
-              }).then(function(){
+              });
+              let first_run = true;
                 //Get realtime updates any time a player is added, or a score is updated
                 let listener = db.collection('rooms').doc(this.state.room_id)
-                  .onSnapshot(function(doc) {
+                  .onSnapshot(function(docUpdate) {
                     var users = [];
                         //Extract the data from firebase into one array
-                        doc.data().player_names.forEach(function(name, index){
-                          users.push({name: doc.data().player_names[index],
-                                      best_odds: doc.data().player_scores[index]});
+                        docUpdate.data().player_names.forEach(function(name, index){
+                          users.push({name: docUpdate.data().player_names[index],
+                                      best_odds: docUpdate.data().player_scores[index]});
                         }.bind(this));
 
                     //Reset the local variables since they have have changed from the listener data
-                    currentNames = doc.data().player_names !== undefined && doc.data().player_names.length
-                      ? doc.data().player_names : [];
-                    currentScores = doc.data().player_scores !== undefined && doc.data().player_scores.length
-                      ? doc.data().player_scores : [];
-                    currentIds = doc.data().board_ids !== undefined && doc.data().board_ids.length
-                      ? JSON.parse(doc.data().board_ids) : [];
-                    currentStates = doc.data().board_states !== undefined && doc.data().board_states.length
-                      ? JSON.parse(doc.data().board_states) : [];
+                    currentNames = docUpdate.data().player_names !== undefined && docUpdate.data().player_names.length
+                      ? docUpdate.data().player_names : [];
+                    currentScores = docUpdate.data().player_scores !== undefined && docUpdate.data().player_scores.length
+                      ? docUpdate.data().player_scores : [];
+                    currentIds = docUpdate.data().board_ids !== undefined && docUpdate.data().board_ids.length
+                      ? JSON.parse(docUpdate.data().board_ids) : [];
+                    currentStates = docUpdate.data().board_states !== undefined && docUpdate.data().board_states.length
+                      ? JSON.parse(docUpdate.data().board_states) : [];
 
-
-                    //Check if user is viewing someone that is not themselves
-                    if (this.state.view_only){
-                      //We are viewing someone else, update the screen for that and prevent animations
-                      if (currentStates.length >= this.state.user_view_index)
-                        this.setState({active: currentStates[this.state.user_view_index]});
-                      else {
-                        console.log("Game could be getting reset, there are not enough entries in the database");
-                      }
-                    }
-                    else{
-                      //Search for bingo squares that other players have selected that this user has not yet
-                      this.state.current_board_state.forEach(function(state, index){
-                        if (state === 0){
-                          //Found a bingo square on user's board that is unclicked, check if someone else has picked it
-                          let idToCheck = this.state.board_ids[index];
-                          let selectedCount = 0; //count of how many players have clicked this specific square
-                          let i = -1;
-                          currentIds.forEach(function(board, idx){
-                            while ((i = board.indexOf(idToCheck, i+1)) !== -1){
-                              //Found a board in the database (also including this user's board) that has this square.
-                              let indexState = currentStates[idx][i]; //Whether the bingo square has been clicked or not
-                              //Check if player has square selected
-                              if (indexState === 1){
-                                selectedCount++;
-                              }
-                            }
-                          }.bind(this));
-                            if (selectedCount > 1){
-                              //At least 2 players have selected this square, now animate it to show this user they missed it
-                              let active_pulse_temp = this.state.active_pulse;
-                              active_pulse_temp[index] = true;
-                              this.setState({active_pulse: active_pulse_temp});
-                            }
-                            else{
-                              // This square probably hasnt been picked yet, turn off any animations
-                              let active_pulse_temp = this.state.active_pulse;
-                              active_pulse_temp[index] = false;
-                              this.setState({active_pulse: active_pulse_temp});
-                            }
+                    //Since transactions don't have a .then for updates, we check here if this is the first execution so you don't auto win from the previous game
+                    if (!first_run){
+                      //Check if user is viewing someone that is not themselves
+                      if (this.state.view_only){
+                        //We are viewing someone else, update the screen for that and prevent animations
+                        if (currentStates.length >= this.state.user_view_index)
+                          this.setState({active: currentStates[this.state.user_view_index]});
+                        else {
+                          console.log("Game could be getting reset, there are not enough entries in the database");
                         }
-                      }.bind(this));
-                    }
-
-                    //save the data in local variables for use later
-                    this.setState({users_unsorted: users},
-                    function(){
-                      //Sort the list by the player score for display on the "leaderboard" table
-                      let usersTemp = JSON.parse(JSON.stringify(users)); //Using this because users_unsorted was getting modified by the following for some reason
-                      usersTemp.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
-                      this.setState({winner_name: doc.data().winner_name})
-                      this.setState({game_over: doc.data().winner},
-                        function(){
-                          if (doc.data().winner === true){
-                            this.state.userListener(); //stop listening to users table to save data usage
-                            this.state.victoryAudio.play();
-                            console.log("play sound...");
-                            localStorage.removeItem("cache_timestamp"); //force the cache to reset next game for the user board
-                            //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
-                          }
-                          else{
-                            this.setState({users : usersTemp},
-                              function(){
-                                //Wait for state to finish updating
-                                this.setState({all_board_states: JSON.parse(doc.data().board_states)});
-                                this.setState({all_board_ids: doc.data().board_ids !== undefined ? JSON.parse(doc.data().board_ids) : []});
-                              }.bind(this));
+                      }
+                      else{
+                        //Search for bingo squares that other players have selected that this user has not yet
+                        this.state.current_board_state.forEach(function(state, index){
+                          if (state === 0){
+                            //Found a bingo square on user's board that is unclicked, check if someone else has picked it
+                            let idToCheck = this.state.board_ids[index];
+                            let selectedCount = 0; //count of how many players have clicked this specific square
+                            let i = -1;
+                            currentIds.forEach(function(board, idx){
+                              while ((i = board.indexOf(idToCheck, i+1)) !== -1){
+                                //Found a board in the database (also including this user's board) that has this square.
+                                let indexState = currentStates[idx][i]; //Whether the bingo square has been clicked or not
+                                //Check if player has square selected
+                                if (indexState === 1){
+                                  selectedCount++;
+                                }
+                              }
+                            }.bind(this));
+                              if (selectedCount > 1){
+                                //At least 2 players have selected this square, now animate it to show this user they missed it
+                                let active_pulse_temp = this.state.active_pulse;
+                                active_pulse_temp[index] = true;
+                                this.setState({active_pulse: active_pulse_temp});
+                              }
+                              else{
+                                // This square probably hasnt been picked yet, turn off any animations
+                                let active_pulse_temp = this.state.active_pulse;
+                                active_pulse_temp[index] = false;
+                                this.setState({active_pulse: active_pulse_temp});
+                              }
                           }
                         }.bind(this));
+                      }
 
-                    }.bind(this));
+                      //save the data in local variables for use later
+                      this.setState({users_unsorted: users},
+                      function(){
+                        //Sort the list by the player score for display on the "leaderboard" table
+                        let usersTemp = JSON.parse(JSON.stringify(users)); //Using this because users_unsorted was getting modified by the following for some reason
+                        usersTemp.sort((a, b) => (a.best_odds > b.best_odds) ? -1 : (a.best_odds < b.best_odds) ? 1: 0); //Sorts the list by how close each user is to winning
+                        this.setState({winner_name: docUpdate.data().winner_name})
+                        this.setState({game_over: docUpdate.data().winner},
+                          function(){
+                            if (docUpdate.data().winner === true){
+                              this.state.userListener(); //stop listening to users table to save data usage
+                              this.state.victoryAudio.play();
+                              console.log("play sound...");
+                              localStorage.removeItem("cache_timestamp"); //force the cache to reset next game for the user board
+                              //Don't do the rest of the actions, so the page doesnt re-render when the game has ended
+                            }
+                            else{
+                              this.setState({users : usersTemp},
+                                function(){
+                                  //Wait for state to finish updating
+                                  this.setState({all_board_states: docUpdate.data().board_states !== undefined ? JSON.parse(docUpdate.data().board_states) : []});
+                                  this.setState({all_board_ids: docUpdate.data().board_ids !== undefined ? JSON.parse(docUpdate.data().board_ids) : []});
+                                }.bind(this));
+                            }
+                          }.bind(this));
 
-                    console.log("Update received from users");
+                      }.bind(this));
+
+                      console.log("Update received from users");
+                    }
+                    else{
+                      first_run = false;
+                    }
+
                 }.bind(this));
                 this.setState({userListener: listener});
                 this.setState({loading: false});
 
                 this.setState({boardVisible: true}); //This displays the board, and prevents the user from instantly winning
-              }.bind(this)).catch(function(error){
-                // The document probably doesn't exist.
-                console.error("Error updating document: ", error);
-              });
             }
 
           }.bind(this))
           .catch(function(error) {
-              console.log("Error getting document:", error);
+              console.log("Error getting or updating document:", error);
           });
+        }.bind(this));
+
+
 
 
   }
@@ -775,8 +783,10 @@ class Bingo extends React.Component {
         console.log("about to search for users");
         db.collection('rooms').doc(this.state.room_id).get()
           .then(function(doc){
-            currentNames = doc.data().player_names;
-            currentScores = doc.data().player_scores;
+            currentNames = doc.data().player_names !== undefined && doc.data().player_names.length
+              ? doc.data().player_names : [];
+            currentScores = doc.data().player_scores !== undefined && doc.data().player_scores.length
+              ? doc.data().player_scores : [];
 
             console.log("got users" + currentNames, " input: " + userName);
             // console.log(currentNames.includes("" + userName));
@@ -859,7 +869,9 @@ class Bingo extends React.Component {
           var currentNames = [];
           var currentScores = [];
           var currentStates = [];
-          db.collection('rooms').doc(this.state.room_id).get()
+          let roomRef = db.collection('rooms').doc(this.state.room_id);
+          db.runTransaction(function(transaction) {
+            return transaction.get(roomRef)
             .then(function(doc){
               currentNames = doc.data().player_names;
               currentScores = doc.data().player_scores;
@@ -875,23 +887,17 @@ class Bingo extends React.Component {
 
               //Update the room document which is being listened to by the realtime listener
               //By updating this, the realtime listener only needs to read one document, instead of (# of users) * document
-              db.collection('rooms').doc(this.state.room_id).update({
+              transaction.update(roomRef,{
                 player_scores: currentScores,
-                board_states: ""+JSON.stringify(currentStates)
-              }).then(function(){
-                // console.log("Winner successfully updated!");
-              }).catch(function(error){
-                // The document probably doesn't exist.
-                console.error("Error updating document: ", error);
+                board_states: JSON.stringify(currentStates)
               });
 
             }.bind(this))
             .catch(function(error) {
-                console.log("Error getting document:", error);
+                console.log("Error getting/updating document:", error);
             });
 
-
-
+          }.bind(this));
         }
       );//5 in a line = win, this number is how many currently in line that is closest to winning on this board
 
