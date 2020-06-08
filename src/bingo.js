@@ -164,9 +164,11 @@ class Bingo extends React.Component {
               .then(function(roomDoc) {
 
                 if (roomDoc.data().last_win !== null && JSON.parse(""+localStorage.getItem("cache_timestamp")) !== null
-                  && JSON.parse(""+localStorage.getItem("cache_timestamp")).seconds >= Math.floor(roomDoc.data().last_win.toDate().getTime() / 1000)){
+                  && JSON.parse(""+localStorage.getItem("cache_timestamp")).seconds >= Math.floor(roomDoc.data().last_win.toDate().getTime() / 1000)
+                  && this.state.room_name === localStorage.getItem("room_name")){
                   //Found cache for the current game, use this instead of making the user have to make a new name and board.
                   console.log("used cache to reuse board");
+                  //We also checked above whether the room we are in is the same room the cache was created in (to eliminate using a board from another room in this room)
                   if (localStorage.getItem('ultra_rare_entries') !== null && localStorage.getItem('ultra_rare_entries') !== '')
                     this.setState({ultra_rare_entries: JSON.parse(localStorage.getItem('ultra_rare_entries'))});
                   if (localStorage.getItem('common_entries') !== null && localStorage.getItem('common_entries') !== '')
@@ -804,6 +806,8 @@ class Bingo extends React.Component {
               localStorage.setItem("active_state",JSON.stringify(this.state.active));
               localStorage.setItem("cached_board", JSON.stringify(this.state.user_board));
               localStorage.setItem("cached_board_ids", JSON.stringify(this.state.board_ids));
+              localStorage.setItem("current_board_state",JSON.stringify(this.state.current_board_state));
+              localStorage.setItem("room_name",this.state.room_name);
               localStorage.setItem("cache_timestamp", JSON.stringify(firebase.firestore.Timestamp.now()));
               this.addUser();
             }
