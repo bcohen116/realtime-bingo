@@ -961,7 +961,8 @@ class Bingo extends React.Component {
 
           }
           else{
-            console.log("This should never happen, player's board has an ID that is not in the list of possible bingo squares");
+            playerBoard.push(new BoardEntry("Not Found","This square must be new and we don't have info for it in your cache",4,this.state.all_entries.length));
+            console.log("square ID wasnt found, its likely this user loaded off of cache, and the player trying to be viewed has a new ID from the database that hasnt been loaded for this user");
           }
         }
         //Update the UI with the clicked player's board
