@@ -68,7 +68,9 @@ class Bingo extends React.Component {
       active_pulse: [false,false,false,false,false,false,false,false,false,false,false,
       false,false,false,false,false,false,false,false,false,false,false,false,false,false],
       bestOdds: 0,
-      mode: 'classic',
+      mode: 'Classic',
+      modeVote: 'classic',
+      modeVoteCounts: [0,0,0,0],
       userListener: null,
       users: [],
       users_unsorted: [],
@@ -83,6 +85,7 @@ class Bingo extends React.Component {
     console.log("Room name received: " + this.state.room_name, ", ID received: " + this.state.room_id);
     this.generateBingoEntries = this.generateBingoEntries.bind(this);
     this.handleChange = this.handleChange.bind(this);
+    this.handleModeChange = this.handleModeChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
     this.addUser = this.addUser.bind(this);
     this.handleClick = this.handleClick.bind(this);
@@ -188,6 +191,9 @@ class Bingo extends React.Component {
                             this.setState({active: JSON.parse(localStorage.getItem("active_state"))},
                               function(){
                                 this.setState({current_board_state: JSON.parse(localStorage.getItem("current_board_state"))},function(){
+                                  if (localStorage.getItem('selected_vote') !== null && localStorage.getItem('selected_vote') !== ''){
+                                    this.setState({modeVote: localStorage.getItem('selected_vote')});
+                                  }
                                   //Wait for all of the states to be set, then do the rest
                                   this.setState({bestOdds: localStorage.getItem("best_odds")},
                                   function(){
@@ -215,6 +221,49 @@ class Bingo extends React.Component {
                                               ? JSON.parse(doc.data().board_ids) : [];
                                             currentStates = doc.data().board_states !== undefined && doc.data().board_states.length
                                               ? JSON.parse(doc.data().board_states) : [];
+
+                                              //check that vote variables exist, if one exists they all should exist since they are all created in the same spot of code
+                                              if (doc.data().mode_classic_votes !== undefined){
+                                                //check player votes to see what method of bingo to use
+                                                let maxVotes = 0;
+                                                maxVotes = Math.max(doc.data().mode_classic_votes, doc.data().mode_4corners_votes, doc.data().mode_diagonals_votes, doc.data().mode_blackout_votes);
+                                                if (maxVotes === doc.data().mode_classic_votes){
+                                                  //in the event of a tie, this will pick "classic mode" as the first choice
+                                                  this.setState({mode: "Classic"}, function(){
+                                                    //set state is finished
+                                                    this.checkBingo();//since the mode was changed, update all the numbers
+                                                  }.bind(this));
+                                                }
+                                                else if (maxVotes === doc.data().mode_4corners_votes){
+                                                  //in the event of a tie, anything above this will be picked first, otherwise this gets priority
+                                                  this.setState({mode: "4 Corners"}, function(){
+                                                    //set state is finished
+                                                    this.checkBingo();//since the mode was changed, update all the numbers
+                                                  }.bind(this));
+                                                }
+                                                else if (maxVotes === doc.data().mode_diagonals_votes){
+                                                  //in the event of a tie, anything above this will be picked first, otherwise this gets priority
+                                                  this.setState({mode: "Diagonals"}, function(){
+                                                    //set state is finished
+                                                    this.checkBingo();//since the mode was changed, update all the numbers
+                                                  }.bind(this));
+                                                }
+                                                else if (maxVotes === doc.data().mode_blackout_votes){
+                                                  //in the event of a tie, anything above this will be picked first, otherwise this gets priority
+                                                  this.setState({mode: "Blackout"}, function(){
+                                                    //set state is finished
+                                                    this.checkBingo();//since the mode was changed, update all the numbers
+                                                  }.bind(this));
+                                                }
+                                                else{
+                                                  console.log("This should never happen, something is broken in the mode selection");
+                                                }
+
+                                                //Update UI with vote counts
+                                                this.setState({modeVoteCounts: [doc.data().mode_classic_votes,doc.data().mode_4corners_votes,doc.data().mode_diagonals_votes,doc.data().mode_blackout_votes]});
+                                                console.log("votes: " + [doc.data().mode_classic_votes,doc.data().mode_4corners_votes,doc.data().mode_diagonals_votes,doc.data().mode_blackout_votes]);
+                                              }
+
 
                                             //Check if user is viewing someone that is not themselves
                                             if (this.state.view_only){
@@ -632,7 +681,8 @@ class Bingo extends React.Component {
                 player_names: currentNames,
                 player_scores: currentScores,
                 board_ids: ""+JSON.stringify(currentIds),
-                board_states: ""+JSON.stringify(currentStates)
+                board_states: ""+JSON.stringify(currentStates),
+                mode_classic_votes: firebase.firestore.FieldValue.increment(1)
               });
               let first_run = true;
                 //Get realtime updates any time a player is added, or a score is updated
@@ -654,6 +704,48 @@ class Bingo extends React.Component {
                       ? JSON.parse(docUpdate.data().board_ids) : [];
                     currentStates = docUpdate.data().board_states !== undefined && docUpdate.data().board_states.length
                       ? JSON.parse(docUpdate.data().board_states) : [];
+
+                    //check that vote variables exist, if one exists they all should exist since they are all created in the same spot of code
+                    if (docUpdate.data().mode_classic_votes !== undefined){
+                      //check player votes to see what method of bingo to use
+                      let maxVotes = 0;
+                      maxVotes = Math.max(docUpdate.data().mode_classic_votes, docUpdate.data().mode_4corners_votes, docUpdate.data().mode_diagonals_votes, docUpdate.data().mode_blackout_votes);
+                      if (maxVotes === docUpdate.data().mode_classic_votes){
+                        //in the event of a tie, this will pick "classic mode" as the first choice
+                        this.setState({mode: "Classic"}, function(){
+                          //set state is finished
+                          this.checkBingo();//since the mode was changed, update all the numbers
+                        }.bind(this));
+                      }
+                      else if (maxVotes === docUpdate.data().mode_4corners_votes){
+                        //in the event of a tie, anything above this will be picked first, otherwise this gets priority
+                        this.setState({mode: "4 Corners"}, function(){
+                          //set state is finished
+                          this.checkBingo();//since the mode was changed, update all the numbers
+                        }.bind(this));
+                      }
+                      else if (maxVotes === docUpdate.data().mode_diagonals_votes){
+                        //in the event of a tie, anything above this will be picked first, otherwise this gets priority
+                        this.setState({mode: "Diagonals"}, function(){
+                          //set state is finished
+                          this.checkBingo();//since the mode was changed, update all the numbers
+                        }.bind(this));
+                      }
+                      else if (maxVotes === docUpdate.data().mode_blackout_votes){
+                        //in the event of a tie, anything above this will be picked first, otherwise this gets priority
+                        this.setState({mode: "Blackout"}, function(){
+                          //set state is finished
+                          this.checkBingo();//since the mode was changed, update all the numbers
+                        }.bind(this));
+                      }
+                      else{
+                        console.log("This should never happen, something is broken in the mode selection");
+                      }
+
+                      //Update UI with vote counts
+                      this.setState({modeVoteCounts: [docUpdate.data().mode_classic_votes,docUpdate.data().mode_4corners_votes,docUpdate.data().mode_diagonals_votes,docUpdate.data().mode_blackout_votes]});
+                      console.log("votes: " + [doc.data().mode_classic_votes,doc.data().mode_4corners_votes,doc.data().mode_diagonals_votes,doc.data().mode_blackout_votes]);
+                    }
 
                     //Since transactions don't have a .then for updates, we check here if this is the first execution so you don't auto win from the previous game
                     if (!first_run){
@@ -743,7 +835,7 @@ class Bingo extends React.Component {
 
           }.bind(this))
           .catch(function(error) {
-              console.log("Error getting or updating document:", error);
+              console.log("Error getting or updating document for adding a user:", error);
           });
         }.bind(this));
 
@@ -756,6 +848,79 @@ class Bingo extends React.Component {
     //Every time a new character is typed the variable gets updated
     this.setState({value: event.target.value});
   }
+
+  handleModeChange = changeEvent => {
+    //When a radio button is selection to vote for a mode for the next game
+    localStorage.setItem('selected_vote', changeEvent.target.value);
+    let roomRef = db.collection('rooms').doc(this.state.room_id);
+    let batch = db.batch();
+    //check which option was previously selected (also ignore everything if the voting is all 0's, that means there's nothing in the database)
+    if (this.state.modeVote === "classic" && this.state.modeVoteCounts !== [0,0,0,0]){
+      //classic mode was previously selected, decrement the counter for this vote option
+      batch.update(roomRef,{
+          mode_classic_votes: firebase.firestore.FieldValue.increment(-1)
+      });
+    }
+    else if (this.state.modeVote === "4corners" && this.state.modeVoteCounts !== [0,0,0,0]){
+      //4 corners mode was previously selected, decrement the counter for this vote option
+      batch.update(roomRef,{
+          mode_4corners_votes: firebase.firestore.FieldValue.increment(-1)
+      });
+
+    }
+    else if (this.state.modeVote === "diagonals" && this.state.modeVoteCounts !== [0,0,0,0]){
+      //diagonals mode was previously selected, decrement the counter for this vote option
+      batch.update(roomRef,{
+          mode_diagonals_votes: firebase.firestore.FieldValue.increment(-1)
+      });
+    }
+    else if (this.state.modeVote === "blackout" && this.state.modeVoteCounts !== [0,0,0,0]){
+      //blackout mode was previously selected, decrement the counter for this vote option
+      batch.update(roomRef,{
+          mode_blackout_votes: firebase.firestore.FieldValue.increment(-1)
+      });
+    }
+
+
+
+    this.setState({
+      modeVote: changeEvent.target.value
+    }, function(){
+      //state finished updating
+      //check which option was selected
+      if (this.state.modeVote === "classic" && this.state.modeVoteCounts !== [0,0,0,0]){
+        //classic mode was previously selected, decrement the counter for this vote option
+        batch.update(roomRef,{
+            mode_classic_votes: firebase.firestore.FieldValue.increment(1)
+        });
+      }
+      else if (this.state.modeVote === "4corners" && this.state.modeVoteCounts !== [0,0,0,0]){
+        //4 corners mode was previously selected, decrement the counter for this vote option
+        batch.update(roomRef,{
+            mode_4corners_votes: firebase.firestore.FieldValue.increment(1)
+        });
+
+      }
+      else if (this.state.modeVote === "diagonals" && this.state.modeVoteCounts !== [0,0,0,0]){
+        //diagonals mode was previously selected, decrement the counter for this vote option
+        batch.update(roomRef,{
+            mode_diagonals_votes: firebase.firestore.FieldValue.increment(1)
+        });
+      }
+      else if (this.state.modeVote === "blackout" && this.state.modeVoteCounts !== [0,0,0,0]){
+        //blackout mode was previously selected, decrement the counter for this vote option
+        batch.update(roomRef,{
+            mode_blackout_votes: firebase.firestore.FieldValue.increment(1)
+        });
+      }
+
+      batch.commit().then(function(){
+        console.log("Updated vote in DB");
+      }).catch(function(error) {
+          console.log("Error updating document for mode selection:", error);
+      });
+    });
+  };
 
   handleSubmit(event) {
     //Enter was pressed or submit btn clicked. Decide what to do now
@@ -825,7 +990,7 @@ class Bingo extends React.Component {
 
   checkBingo(){
     var maxOdds = 0;
-    if (this.state.mode === 'classic'){
+    if (this.state.mode === 'Classic'){
       //default mode, 5 in a line to win
 
       //check rows
@@ -864,54 +1029,111 @@ class Bingo extends React.Component {
       }
       maxOdds = Math.max(diagonal2Odds, maxOdds);
 
-      localStorage.setItem("best_odds",maxOdds);
-      this.setState({bestOdds : maxOdds},
-        function(){
-          //SetState completed
 
-          //Get the current scores of all players so we don't ruin any data by updating
-          var currentNames = [];
-          var currentScores = [];
-          var currentStates = [];
-          let roomRef = db.collection('rooms').doc(this.state.room_id);
-          db.runTransaction(function(transaction) {
-            return transaction.get(roomRef)
-            .then(function(doc){
-              currentNames = doc.data().player_names;
-              currentScores = doc.data().player_scores;
-              currentStates = JSON.parse(doc.data().board_states);
-
-              currentNames.forEach(function(name, index){
-                if (name === this.state.value.trim()){
-                  //Update the player scores with the new value
-                  currentScores[index] = this.state.bestOdds;
-                  currentStates[index] = this.state.current_board_state;
-                }
-              }.bind(this));
-
-              //Update the room document which is being listened to by the realtime listener
-              //By updating this, the realtime listener only needs to read one document, instead of (# of users) * document
-              transaction.update(roomRef,{
-                player_scores: currentScores,
-                board_states: JSON.stringify(currentStates)
-              });
-
-            }.bind(this))
-            .catch(function(error) {
-                console.log("Error getting/updating document:", error);
-            });
-
-          }.bind(this));
-        }
-      );//5 in a line = win, this number is how many currently in line that is closest to winning on this board
-
-
+      //5 in a line = win, this number is how many currently in line that is closest to winning on this board
       if (maxOdds >= 5){
         //This board has Bingo!
         console.log("Bingo!");
 
       }
     }
+    else if (this.state.mode === '4 Corners'){
+      if (this.state.current_board_state[0] === 1){
+        maxOdds += 1;
+      }
+      if (this.state.current_board_state[4] === 1){
+        maxOdds += 1;
+      }
+      if (this.state.current_board_state[20] === 1){
+        maxOdds += 1;
+      }
+      if (this.state.current_board_state[24] === 1){
+        maxOdds += 1;
+      }
+      if (maxOdds >= 4){
+        //This board has Bingo!
+        console.log("Bingo!");
+
+      }
+    }
+    else if (this.state.mode === 'Diagonals'){
+      //Check diagonals
+      let diagonal1Odds = 0;
+      for (let item = 0; item < 5; item++){
+        if (this.state.current_board_state[item*6] === 1){
+          diagonal1Odds += 1;
+        }
+      }
+
+      //second diagonal
+      let diagonal2Odds = 0;
+      for (let item = 0; item < 5; item++){
+        if (this.state.current_board_state[(item+1) * 4] === 1){
+          diagonal2Odds += 1;
+        }
+      }
+      maxOdds = diagonal1Odds + diagonal2Odds;
+
+      if (maxOdds >= 10){
+        //This board has Bingo!
+        console.log("Bingo!");
+
+      }
+    }
+    else if (this.state.mode === 'Blackout'){
+      //To win blackout, user must have every square selected
+      this.state.current_board_state.forEach(function(square){
+        if (square === 1){
+          maxOdds += 1;
+        }
+      }.bind(this));
+      if (maxOdds >= 25){
+        //This board has Bingo!
+        console.log("Bingo!");
+      }
+    }
+
+    //Regardless of the mode, update the database with how close this user is to winning (game score by how many squares match up)
+    localStorage.setItem("best_odds",maxOdds);
+    this.setState({bestOdds : maxOdds},
+      function(){
+        //SetState completed
+
+        //Get the current scores of all players so we don't ruin any data by updating
+        var currentNames = [];
+        var currentScores = [];
+        var currentStates = [];
+        let roomRef = db.collection('rooms').doc(this.state.room_id);
+        db.runTransaction(function(transaction) {
+          return transaction.get(roomRef)
+          .then(function(doc){
+            currentNames = doc.data().player_names;
+            currentScores = doc.data().player_scores;
+            currentStates = JSON.parse(doc.data().board_states);
+
+            currentNames.forEach(function(name, index){
+              if (name === this.state.value.trim()){
+                //Update the player scores with the new value
+                currentScores[index] = this.state.bestOdds;
+                currentStates[index] = this.state.current_board_state;
+              }
+            }.bind(this));
+
+            //Update the room document which is being listened to by the realtime listener
+            //By updating this, the realtime listener only needs to read one document, instead of (# of users) * document
+            transaction.update(roomRef,{
+              player_scores: currentScores,
+              board_states: JSON.stringify(currentStates)
+            });
+
+          }.bind(this))
+          .catch(function(error) {
+              console.log("Error getting/updating document with the player scores:", error);
+          });
+
+        }.bind(this));
+      }
+    );
   }
 
   showPlayer(event){
@@ -1050,6 +1272,10 @@ class Bingo extends React.Component {
       player_scores: [],
       board_ids: [],
       board_states: [],
+      mode_classic_votes: 0,
+      mode_4corners_votes: 0,
+      mode_diagonals_votes: 0,
+      mode_blackout_votes: 0,
       last_win: firebase.firestore.FieldValue.serverTimestamp()
     }).then(function(){
       this.setState({game_over: true})
@@ -1065,6 +1291,8 @@ class Bingo extends React.Component {
     let url = window.location.origin + "/upload/" + encodeURIComponent(this.state.room_name);
     window.open(url, '_blank');
   }
+
+
   render() {
     const boardItems = this.state.user_board.map((entry,id) => (
       <Button key={id} className="bingoSquare" variant="outline-primary">
@@ -1077,6 +1305,26 @@ class Bingo extends React.Component {
     const tooltip = (
       <Tooltip id="overlay-example">
         URL copied to clipboard
+      </Tooltip>
+    );
+    function classicTip(props){
+      return (<Tooltip id="classicOverlay" {...props}>
+        Match 5 in a row , column or diagonal to win.
+      </Tooltip>);
+    }
+    const cornerTip = (
+      <Tooltip id="cornerOverlay">
+        Mark each corner square to win.
+      </Tooltip>
+    );
+    const diagonalTip = (
+      <Tooltip id="diagonalOverlay">
+        Mark an "X" shape to win.
+      </Tooltip>
+    );
+    const blackoutTip = (
+      <Tooltip id="blackoutOverlay">
+        Mark ALL squares on the board to win.
       </Tooltip>
     );
     // console.log("rendered page");
@@ -1103,7 +1351,9 @@ class Bingo extends React.Component {
               <p className="entryDescription">{entry.description}</p>
               </Button>
             )}
-            {this.state.bestOdds >= 5 && (<Button className="bingoWinBtn" variant="outline-danger" onClick={this.handleBingoWin}>Bingo!</Button>)}
+            {((this.state.mode === "Classic" && this.state.bestOdds >= 5) || (this.state.mode === "4 Corners" && this.state.bestOdds >= 4) || (this.state.mode === "Diagonals" && this.state.bestOdds >= 10)
+              || (this.state.mode === "Blackout" && this.state.bestOdds >= 25))
+            && (<Button className="bingoWinBtn" variant="outline-danger" onClick={this.handleBingoWin}>Bingo!</Button>)}
           </div></div>)}
 
           {!this.state.boardVisible && (<form onSubmit={this.handleSubmit}>
@@ -1114,10 +1364,14 @@ class Bingo extends React.Component {
               <Button className="createBtn" variant="outline-success" type="submit" >Enter Name</Button>{' '}
             </div>
           </form>)}
+          <div className="sidebarWrapper">
           {this.state.boardVisible && (<div className="playerList">
-            <p style={{color: "white"}}>Bingo Betting and mode voting coming soon&trade;</p>
+            <p style={{color: "white"}}>Bingo Betting maybe coming soon&trade;</p>
             <Table striped bordered hover variant="dark" >
               <thead>
+                <tr>
+                  <th colSpan="2">Current Gamemode: {this.state.mode}</th>
+                </tr>
                 <tr>
                   <th></th>
                   <th>Name</th>
@@ -1133,6 +1387,78 @@ class Bingo extends React.Component {
               </tbody>
             </Table>
           </div>)}
+          {this.state.boardVisible && (<div className="radioWrapper"><p style={{color:"white"}}>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _</p><div className="radio-group">
+            <Table striped bordered hover variant="dark" >
+              <thead>
+                <tr>
+                  <th colSpan="2">Game Mode Voting</th>
+                </tr>
+              </thead>
+              <tbody>
+
+                <tr><td>
+                <OverlayTrigger  delay={{ show: 150, hide: 400 }} placement="bottom" overlay={classicTip}>
+                  <label className="radioText">
+                    <input
+                      type="radio"
+                      value="classic"
+                      checked={this.state.modeVote === "classic"}
+                      onChange={this.handleModeChange}
+                      className="radio-group-input"
+                    />
+                    Classic ({this.state.modeVoteCounts[0]})
+                    </label>
+                  </OverlayTrigger>
+                </td></tr>
+                <tr><td>
+                <OverlayTrigger  delay={{ show: 150, hide: 400 }} placement="bottom" overlay={cornerTip}>
+                  <label className="radioText">
+                    <input
+                      type="radio"
+                      value="4corners"
+                      checked={this.state.modeVote === "4corners"}
+                      onChange={this.handleModeChange}
+                      className="radio-group-input"
+                    />
+                    4 Corners ({this.state.modeVoteCounts[1]})
+                    </label>
+                  </OverlayTrigger>
+                </td></tr>
+
+              <tr><td>
+              <OverlayTrigger  delay={{ show: 150, hide: 400 }} placement="bottom" overlay={diagonalTip}>
+                <label className="radioText">
+                  <input
+                    type="radio"
+                    value="diagonals"
+                    checked={this.state.modeVote === "diagonals"}
+                    onChange={this.handleModeChange}
+                    className="radio-group-input"
+                  />
+                  Diagonals ({this.state.modeVoteCounts[2]})
+                  </label>
+                </OverlayTrigger>
+                </td></tr>
+              <tr><td>
+              <OverlayTrigger  delay={{ show: 150, hide: 400 }} placement="bottom" overlay={blackoutTip}>
+                <label className="radioText">
+                  <input
+                    type="radio"
+                    value="blackout"
+                    checked={this.state.modeVote === "blackout"}
+                    onChange={this.handleModeChange}
+                    className="radio-group-input"
+                  />
+                  Blackout ({this.state.modeVoteCounts[3]})
+                  </label>
+                </OverlayTrigger>
+                </td></tr>
+              </tbody>
+            </Table>
+
+          </div>
+          </div>
+        )}</div>
         </div>
         <Button className="uploadBtn" style={{visibility: "hidden"}} variant="secondary" onClick={this.moveToUpload}>
           Upload Bingo Data

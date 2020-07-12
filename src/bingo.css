@@ -11,7 +11,9 @@
      }
 }
 
-
+body {
+  background-color: #282c34;
+}
 .bingoSquare {
 
 }
@@ -28,6 +30,27 @@
 
 .entryDescription {
   font-size: x-small;
+}
+
+.sidebarWrapper{
+  display: table-cell;
+}
+
+.radioText{
+  color: white;
+}
+
+.radio-group-input{
+  margin-right: 1vw;
+}
+
+.radioWrapper{
+  display: table-cell;
+
+}
+
+.radio-group{
+  display: grid;
 }
 
 .uploadBtn{
@@ -88,8 +111,8 @@ input.createInput {
 }
 
 .playerList {
-  display: table-cell;
-  width:25%;
+  display: grid;
+  /*width:25%;*/
 }
 
 .bingoWinBtn{
@@ -111,12 +134,14 @@ input.createInput {
 @media screen and (max-width: 750px) {
   .bingoBoard {
     display: grid;
-    grid-template-columns: auto auto auto auto auto;
+    grid-template-columns: minmax(25vw, auto)  minmax(25vw, auto)  minmax(25vw, auto)  minmax(25vw, auto)  minmax(25vw, auto) ;
     grid-template-rows: auto auto auto auto auto;
     column-gap: 10px;
     row-gap: 15px;
     margin-right: 10px;
     width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .mainPage {
@@ -126,6 +151,7 @@ input.createInput {
 
   .playerList {
     display: table-cell;
-    width:25vw;
+    padding-left: 2vw;
+    /*width:25vw;*/
   }
 }
