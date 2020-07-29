@@ -292,7 +292,7 @@ class Bingo extends React.Component {
                                                       }
                                                     }
                                                   }.bind(this));
-                                                    if (selectedCount > 1){
+                                                    if (selectedCount > 0){
                                                       //At least 2 players have selected this square, now animate it to show this user they missed it
                                                       let active_pulse_temp = this.state.active_pulse;
                                                       active_pulse_temp[index] = true;
@@ -359,8 +359,8 @@ class Bingo extends React.Component {
                 else{
                   //The cache is older than the last win, which means it's for the previous game and we don't want to use it
                   console.log("Generating new board...");
-                  //Now check if we cached the info for what can go on a bingo board (expires every 24h to keep the data fresh)
-                  if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) > Date.now() - localStorage.getItem('timestamp')){
+                  //Now check if we cached the info for what can go on a bingo board (expires every 20h to keep the data fresh)
+                  if (localStorage.getItem('timestamp') !== null && (20*60*60*1000) > Date.now() - localStorage.getItem('timestamp')){
                     if (localStorage.getItem('ultra_rare_entries') !== null && localStorage.getItem('ultra_rare_entries') !== '')
                       this.setState({ultra_rare_entries: JSON.parse(localStorage.getItem('ultra_rare_entries'))});
                     if (localStorage.getItem('common_entries') !== null && localStorage.getItem('common_entries') !== '')
@@ -380,7 +380,7 @@ class Bingo extends React.Component {
                   }
                   else {
                     //Cache is old or we have no cache, go out to firebase to get the updated info
-                    if (localStorage.getItem('timestamp') !== null && (24*60*60*1000) <= Date.now() - localStorage.getItem('timestamp')){
+                    if (localStorage.getItem('timestamp') !== null && (20*60*60*1000) <= Date.now() - localStorage.getItem('timestamp')){
                       localStorage.removeItem("all_entries");
                       localStorage.removeItem("common_entries");
                       localStorage.removeItem("uncommon_entries");
@@ -776,8 +776,8 @@ class Bingo extends React.Component {
                                 }
                               }
                             }.bind(this));
-                              if (selectedCount > 1){
-                                //At least 2 players have selected this square, now animate it to show this user they missed it
+                              if (selectedCount > 0){
+                                //At least 1 players have selected this square, now animate it to show this user they missed it
                                 let active_pulse_temp = this.state.active_pulse;
                                 active_pulse_temp[index] = true;
                                 this.setState({active_pulse: active_pulse_temp});
@@ -974,6 +974,7 @@ class Bingo extends React.Component {
               localStorage.setItem("current_board_state",JSON.stringify(this.state.current_board_state));
               localStorage.setItem("room_name",this.state.room_name);
               localStorage.setItem("cache_timestamp", JSON.stringify(firebase.firestore.Timestamp.now()));
+              localStorage.setItem('selected_vote', 'classic');//reset vote so it doesn't select the wrong one on a cache reload
               this.addUser();
             }
             else{
